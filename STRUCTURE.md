@@ -68,7 +68,7 @@ app/src/main/
 │       │   └── CryptoBenchmarkViewModel.kt     # Telemetría de procesador y medición de fases RSA
 │       └── theme/
 │           ├── Color.kt                 # Paleta de colores índigo/cian de seguridad
-│           ├── Theme.kt                 # Tema Material Design 3 dinámico
+│           ├── Theme.kt                 # Tema Material Design 3 con escala de fuentes fija (fontScale = 1.0f)
 │           └── Type.kt                  # Tipografía de la aplicación
 │
 └── res/
@@ -101,6 +101,7 @@ app/src/main/
 * **`KeystoreRepository.kt`**: Repositorio que sincroniza Room con el disco: al borrar un registro, elimina también el archivo físico para no saturar la memoria del teléfono.
 
 ### 3. `ui/`
+* **`MainActivity.kt`**: Contenedor principal con `NavHost`, `CenterAlignedTopAppBar` y `NavigationBar`. Implementa acondicionamiento quirúrgico de `contentWindowInsets` para que pantallas secundarias (`KeystoreDetailScreen`, `ColorPickerScreen`) gobiernen su propio `Scaffold` y `TopAppBar` pegados a la barra de estado, sin duplicación de insets ni espacios residuales.
 * **`GeneratorScreen.kt` & `GeneratorViewModel.kt`**: Pantalla de creación asistida con selector dual de formato (`.jks` / `.keystore`), autocompletado y sufijo inteligente de nombres de archivo, control deslizante continuo de validez (1 día a 100 años) con cálculo dinámico de caducidad y accesos rápidos, datos de prueba y validaciones.
 * **`KeystoreListScreen.kt` & `KeystoreListViewModel.kt`**: Lista de keystores con buscador en vivo y tarjeta con metadata esencial.
 * **`KeystoreDetailScreen.kt` & `KeystoreDetailViewModel.kt`**:
@@ -126,5 +127,5 @@ app/src/main/
   - Pipeline de GitHub Actions ejecutado en contenedores limpios `ubuntu-latest`.
   - Configura Java 17 y Gradle con la caché desactivada (`cache-disabled: true`, `--no-daemon`, `--no-build-cache`).
   - Ejecuta `generate-debug-keystore.sh` para auto-firmar la compilación sin depender de variables de entorno ni secrets.
-  - Genera y desglosa los paquetes APK Debug en directorios independientes por arquitectura (`arm64-v8a`, `armeabi-v7a`, `x86_64` y `universal`).
-  - Sube cada paquete como un artefacto individual mediante `actions/upload-artifact@v4`, permitiendo descargarlos directamente desde el teléfono sin lidiar con archivos zip comprimidos monolíticos.
+  - Aprovecha los splits nativos de Gradle (`splits.abi`) para empaquetar de forma estricta y aislada cada arquitectura (`arm64-v8a`, `armeabi-v7a`, `x86_64` y `universal`), asegurando que en `lib/` no se mezclen binarios de otras arquitecturas.
+  - Sube cada paquete como un artefacto individual mediante `actions/upload-artifact@v4`, permitiendo descargarlos directamente desde el teléfono sin lidiar con archivos zip comprimidos monolíticos y con el menor tamaño posible.

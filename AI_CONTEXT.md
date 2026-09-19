@@ -54,6 +54,19 @@ Keystore Creator es una aplicación nativa para Android cuyo objetivo es permiti
 
 ---
 
+## 🎨 Directrices de UI, Tipografía y Edge-to-Edge
+
+### 1. Tamaño de Letra Fijo (`fontScale = 1.0f`)
+- Para evitar que la configuración de accesibilidad del sistema operativo Android del usuario deforme la interfaz, corte textos o desborde tarjetas con alta densidad técnica, la app fuerza un escalado de fuente estricto (`fontScale = 1.0f`) mediante `CompositionLocalProvider(LocalDensity provides Density(currentDensity.density, fontScale = 1.0f))` en `MyApplicationTheme`.
+- La densidad de pantalla (ppi) se mantiene intacta, garantizando nitidez y adaptabilidad en cualquier resolución de smartphone sin rupturas visuales.
+
+### 2. Gestión Quirúrgica de Insets Edge-to-Edge (Sin Doble Espaciado Superior)
+- El `Scaffold` principal de `MainActivity` acondiciona su `contentWindowInsets` y el padding del `NavHost`:
+  - En pantallas principales (`Generator`, `KeystoreList`, `Settings`), aplica los insets del sistema para dar cabida a la barra superior y la barra inferior.
+  - En pantallas secundarias/hijas (`KeystoreDetailScreen`, `ColorPickerScreen`), suprime los insets del contenedor raíz (`PaddingValues(0.dp)`) permitiendo que cada pantalla hija gobierne su propio `Scaffold` y `TopAppBar` nativamente contra la barra de estado, erradicando franjas vacías o duplicación de márgenes superiores.
+
+---
+
 ## 🚫 Restricciones de Licencias de Dependencias
 - **Prohibición estricta:** No agregar dependencias con licencias GPL, AGPL o licencias que obliguen al proyecto a abrir su código fuente o exponerlo públicamente.
 - Se permiten licencias MIT, Apache 2.0, BSD y Bouncy Castle.

@@ -41,6 +41,8 @@ Una aplicación móvil moderna desarrollada en **Kotlin** y **Jetpack Compose** 
     - Botón de restablecimiento al color original de la aplicación.
   - **Vista Previa en Vivo:** Tarjeta dinámica que renderiza botones y componentes con el color y tema seleccionados en tiempo real antes de salir.
   - **Persistencia Reactiva:** Cambios guardados al instante con `ThemePreferences` y propagados fluidamente por toda la app mediante `ThemeViewModel`.
+  - **Tipografía y Escala de Fuente Fija (`fontScale = 1.0f`):** Se desacopla la escala de texto de la configuración de accesibilidad del teléfono para proteger el diseño visual, evitando rupturas, cortes de palabras o desbordamientos en tarjetas y botones, manteniendo intacta la escala de píxeles por densidad.
+  - **Alineación Edge-to-Edge Perfeccionada:** Gestión de insets sin duplicación en pantallas secundarias (`KeystoreDetailScreen`, `ColorPickerScreen`), garantizando barras superiores perfectamente pegadas a la barra de estado sin espacios vacíos.
 
 - **Crypto Lab: Herramientas de Depuración y Auditoría Independientes:**
   - **Doble Lanzador en el Sistema:** Dispone de su propia actividad independiente (`DebugToolsActivity`) con icono dedicado en el cajón de aplicaciones de Android ("Crypto Lab (Debug)") y acceso directo desde los Ajustes de la aplicación.
@@ -63,11 +65,11 @@ Una aplicación móvil moderna desarrollada en **Kotlin** y **Jetpack Compose** 
 - **Pipeline de Compilación Automatizada en GitHub Actions (`.github/workflows/build-debug-apk.yml`):**
   - **Firma Generada en Vivo desde Cero:** No espera firmas preexistentes ni requiere secrets. Ejecuta obligatoriamente el script `scripts/generate-debug-keystore.sh` que purga cualquier residuo previo y genera con `keytool` una nueva firma en formato PKCS12 / JKS (`debug.keystore`) con par asimétrico RSA de 2048 bits y validez de 10.000 días.
   - **Compilación Estrictamente Sin Caché:** Configuración con caché desactivada en JDK y Gradle (`cache-disabled: true`, `--no-daemon`, `--no-build-cache`), garantizando builds 100% limpios y reproducibles.
-  - **Artefactos Subidos Individualmente por Arquitectura (Sin Zip Único):** En lugar de empaquetar todos los archivos en un único zip comprimido difícil de gestionar desde un teléfono, el action sube de forma individual e independiente cada arquitectura a la sección de Artifacts de GitHub:
-    - 📱 `APK-Debug-arm64-v8a`: Para procesadores móviles modernos de 64 bits.
-    - 📱 `APK-Debug-armeabi-v7a`: Para procesadores móviles de 32 bits o dispositivos económicos/legacy.
-    - 💻 `APK-Debug-x86_64`: Para emuladores Android y computadoras personales.
-    - 🌐 `APK-Debug-Universal`: Binario compatible con todas las arquitecturas del mercado.
+  - **Splits Nativos de Gradle (`splits.abi`) y Artefactos Individuales por Arquitectura:** En lugar de distribuir un binario universal que contenga todas las librerías nativas, Gradle divide y empaqueta de forma estricta las arquitecturas (`armeabi-v7a`, `arm64-v8a`, `x86_64` y `universal`). Cada APK contiene en su carpeta interna `lib/` única y exclusivamente los binarios de su arquitectura:
+    - 📱 `APK-Debug-arm64-v8a`: Binario ligero exclusivo para procesadores móviles modernos de 64 bits (solo `lib/arm64-v8a/`).
+    - 📱 `APK-Debug-armeabi-v7a`: Binario ligero exclusivo para procesadores móviles de 32 bits o dispositivos económicos (solo `lib/armeabi-v7a/`).
+    - 💻 `APK-Debug-x86_64`: Binario exclusivo para emuladores Android y computadoras (solo `lib/x86_64/`).
+    - 🌐 `APK-Debug-Universal`: Binario unificado que incluye todas las arquitecturas del mercado.
   - **Disparador Manual y Automático:** Configurado con evento `workflow_dispatch` para compilar con un solo clic desde la web de GitHub en el móvil, y automáticamente tras cada `push` a las ramas principales.
 
 - **Script de Control de Firma Forzada (`scripts/generate-debug-keystore.sh`):**

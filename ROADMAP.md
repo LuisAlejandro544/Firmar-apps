@@ -83,12 +83,19 @@ Este documento define el plan de evolución y las próximas funcionalidades de l
   - [x] Destrucción de cualquier firma residual en el entorno antes de compilar.
   - [x] Generación autónoma con `keytool` en formato PKCS12/JKS con par RSA 2048 y validez de 10.000 días.
   - [x] Comprobación de integridad y volcado forense de huellas digitales en consola.
-- [x] **Distribución de Artefactos Individuales por Arquitectura:**
-  - [x] `APK-Debug-arm64-v8a`: Binario específico para procesadores ARM de 64 bits.
-  - [x] `APK-Debug-armeabi-v7a`: Binario específico para procesadores ARM de 32 bits.
-  - [x] `APK-Debug-x86_64`: Binario específico para emuladores y PC.
+- [x] **Distribución de Artefactos Individuales con Splits Reales de ABI (`splits.abi`):**
+  - [x] Configuración de `splits.abi` en Gradle para generar binarios independientes por arquitectura.
+  - [x] `APK-Debug-arm64-v8a`: Binario exclusivo ARM de 64 bits con únicamente librerías `lib/arm64-v8a/` (sin residuos de 32 bits ni x86).
+  - [x] `APK-Debug-armeabi-v7a`: Binario exclusivo ARM de 32 bits con únicamente librerías `lib/armeabi-v7a/`.
+  - [x] `APK-Debug-x86_64`: Binario exclusivo para emuladores con únicamente librerías `lib/x86_64/`.
   - [x] `APK-Debug-Universal`: Binario unificado compatible con todas las arquitecturas.
-  - [x] Subida en artifacts independientes para descarga directa desde el móvil sin requerir descomprimir zips complejos.
+  - [x] Verificación automatizada con `unzip -l` en los logs del pipeline para auditar las carpetas `lib/` de cada binario.
+
+---
+
+### ✅ Fase 5.1: Refinamiento de Diseño, Tipografía Fija e Insets (Completada)
+- [x] **Fijación de Escala de Fuente (`fontScale = 1.0f`):** Desacoplamiento global del tamaño de fuente respecto a las opciones de accesibilidad del teléfono en `MyApplicationTheme`, evitando roturas de layout o desbordes en tarjetas.
+- [x] **Corrección de Insets en Pantallas Secundarias:** Eliminación del doble padding superior en `KeystoreDetailScreen` y `ColorPickerScreen`, garantizando un acoplamiento perfecto de la `TopAppBar` a la barra de estado.
 
 ---
 

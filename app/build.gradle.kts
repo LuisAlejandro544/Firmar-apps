@@ -47,6 +47,15 @@ android {
     }
     debug { signingConfig = signingConfigs.getByName("debugConfig") }
   }
+  splits {
+    abi {
+      isEnable = true
+      reset()
+      include("armeabi-v7a", "arm64-v8a", "x86_64")
+      isUniversalApk = true
+    }
+  }
+
   compileOptions {
     sourceCompatibility = JavaVersion.VERSION_11
     targetCompatibility = JavaVersion.VERSION_11

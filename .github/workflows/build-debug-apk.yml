@@ -61,19 +61,26 @@ jobs:
           chmod +x ./gradlew
           ./gradlew assembleDebug --no-daemon --no-build-cache --stacktrace
 
-      # Paso 6: Verificar que el APK Debug se haya generado exitosamente
-      - name: "🔍 Verificar existencia del APK Debug compilado"
+      # Paso 6: Verificar que los APKs Debug por arquitectura se hayan generado exitosamente
+      - name: "🔍 Verificar existencia de los APKs Debug compilados"
         run: |
-          APK_ORIGIN="app/build/outputs/apk/debug/app-debug.apk"
-          if [ ! -f "$APK_ORIGIN" ]; then
-            echo "❌ ERROR: No se encontró el binario compilado en $APK_ORIGIN"
+          APK_DIR="app/build/outputs/apk/debug"
+          for ABI in "arm64-v8a" "armeabi-v7a" "x86_64"; do
+            if [ ! -f "$APK_DIR/app-$ABI-debug.apk" ]; then
+              echo "❌ ERROR: No se encontró el binario para $ABI en $APK_DIR/app-$ABI-debug.apk"
+              exit 1
+            fi
+            echo "✅ APK Debug $ABI encontrado. Tamaño: $(wc -c < "$APK_DIR/app-$ABI-debug.apk") bytes"
+          done
+          if [ ! -f "$APK_DIR/app-universal-debug.apk" ]; then
+            echo "❌ ERROR: No se encontró el binario Universal en $APK_DIR/app-universal-debug.apk"
             exit 1
           fi
-          echo "✅ APK Debug compilado con éxito. Tamaño: $(wc -c < "$APK_ORIGIN") bytes"
+          echo "✅ APK Debug Universal encontrado. Tamaño: $(wc -c < "$APK_DIR/app-universal-debug.apk") bytes"
 
       # Paso 7: Desglosar y organizar los APKs por arquitectura de destino
-      # Esto permite a los usuarios en teléfonos móviles descargar la arquitectura exacta
-      # que requiere su procesador (arm64-v8a de 64 bits, armeabi-v7a de 32 bits, x86_64 o Universal)
+      # Cada APK contiene de forma estricta y exclusiva las librerías nativas (.so) de su arquitectura,
+      # reduciendo drásticamente el peso y garantizando aislamiento total.
       - name: "📦 Organizar APKs por arquitectura para entrega individual"
         run: |
           mkdir -p dist/arm64-v8a
@@ -81,21 +88,31 @@ jobs:
           mkdir -p dist/x86_64
           mkdir -p dist/universal
 
-          APK_ORIGIN="app/build/outputs/apk/debug/app-debug.apk"
+          APK_DIR="app/build/outputs/apk/debug"
 
-          # 1. Copia para Arquitectura ARM 64-bit (Teléfonos móviles modernos)
-          cp "$APK_ORIGIN" dist/arm64-v8a/KeystoreCreator-debug-arm64-v8a.apk
+          # 1. Copia para Arquitectura ARM 64-bit (Exclusivamente binarios arm64-v8a)
+          cp "$APK_DIR/app-arm64-v8a-debug.apk" dist/arm64-v8a/KeystoreCreator-debug-arm64-v8a.apk
 
-          # 2. Copia para Arquitectura ARM 32-bit (Teléfonos económicos o legacy)
-          cp "$APK_ORIGIN" dist/armeabi-v7a/KeystoreCreator-debug-armeabi-v7a.apk
+          # 2. Copia para Arquitectura ARM 32-bit (Exclusivamente binarios armeabi-v7a)
+          cp "$APK_DIR/app-armeabi-v7a-debug.apk" dist/armeabi-v7a/KeystoreCreator-debug-armeabi-v7a.apk
 
-          # 3. Copia para Arquitectura x86_64 (Emuladores y PC)
-          cp "$APK_ORIGIN" dist/x86_64/KeystoreCreator-debug-x86_64.apk
+          # 3. Copia para Arquitectura x86_64 (Exclusivamente binarios x86_64)
+          cp "$APK_DIR/app-x86_64-debug.apk" dist/x86_64/KeystoreCreator-debug-x86_64.apk
 
           # 4. Copia Universal (Compatible con todas las arquitecturas)
-          cp "$APK_ORIGIN" dist/universal/KeystoreCreator-debug-universal.apk
+          cp "$APK_DIR/app-universal-debug.apk" dist/universal/KeystoreCreator-debug-universal.apk
 
-          echo "Listado de paquetes generados por arquitectura:"
+          echo "📋 Verificación de librerías nativas incluidas en cada binario:"
+          echo "--- ARM 64-bit (debe tener solo lib/arm64-v8a): ---"
+          unzip -l dist/arm64-v8a/KeystoreCreator-debug-arm64-v8a.apk | grep "lib/" || true
+          echo "--- ARM 32-bit (debe tener solo lib/armeabi-v7a): ---"
+          unzip -l dist/armeabi-v7a/KeystoreCreator-debug-armeabi-v7a.apk | grep "lib/" || true
+          echo "--- x86_64 (debe tener solo lib/x86_64): ---"
+          unzip -l dist/x86_64/KeystoreCreator-debug-x86_64.apk | grep "lib/" || true
+          echo "--- Universal (debe tener todas las ABIs): ---"
+          unzip -l dist/universal/KeystoreCreator-debug-universal.apk | grep "lib/" || true
+
+          echo "Listado final de paquetes generados por arquitectura:"
           ls -lh dist/*/*.apk
 
       # Paso 8.1: Subir Artifact individual para ARM 64-bit (arm64-v8a)

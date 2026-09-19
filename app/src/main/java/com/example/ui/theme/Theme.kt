@@ -9,8 +9,11 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import com.example.ui.settings.AppThemeMode
 
 private val DarkColorScheme =
@@ -94,7 +97,20 @@ fun MyApplicationTheme(
     else -> LightColorScheme
   }
 
-  MaterialTheme(colorScheme = colorScheme, typography = Typography, content = content)
+  // Se fuerza un tamaño de fuente fijo (fontScale = 1.0f) preservando la densidad de píxeles (ppi)
+  // de la pantalla. Esto evita que fuentes con tamaños personalizados del sistema Android alteren
+  // el diseño, corten textos o desborden tarjetas y controles.
+  val currentDensity = LocalDensity.current
+  val fixedDensity = Density(
+    density = currentDensity.density,
+    fontScale = 1.0f
+  )
+
+  CompositionLocalProvider(
+    LocalDensity provides fixedDensity
+  ) {
+    MaterialTheme(colorScheme = colorScheme, typography = Typography, content = content)
+  }
 }
 
 @Composable
