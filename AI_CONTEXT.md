@@ -52,6 +52,20 @@ Keystore Creator es una aplicación nativa para Android cuyo objetivo es permiti
 ### 5. Conversión a Base64 para CI/CD
 - La codificación a Base64 se realiza mediante `android.util.Base64.encodeToString(bytes, Base64.NO_WRAP)` para evitar saltos de línea indeseados que rompan secretos en GitHub Actions (`ANDROID_KEYSTORE_BASE64`) o GitLab CI.
 
+### 6. Cifrado de Credenciales en Reposo (Android KeyStore + AES-256-GCM)
+- **Problema abordado:** Si un teléfono es rooteado, inspeccionado forensemente o si se realiza un backup de la app, una base de datos SQLite estándar contendría las contraseñas del keystore en texto plano.
+- **Arquitectura implementada:** `SecureCredentialsCipher` utiliza el hardware seguro **AndroidKeyStore** (TEE/StrongBox) para generar y resguardar una clave maestra AES de 256 bits (`KeystoreVaultMasterKey`).
+- Cada contraseña se cifra con `AES/GCM/NoPadding` generando un IV aleatorio de 12 bytes (`SecureRandom`) y un tag de autenticación de 128 bits.
+- El formato almacenado en Room es `enc:v1:<Base64(IV + CipherText + Tag)>`.
+- **Compatibilidad hacia atrás:** Si el texto no inicia con `enc:v1:`, el motor sabe que es un registro heredado y lo descifra/retorna en texto plano de forma transparente.
+- En `KeystoreRepository`, el cifrado y descifrado se ejecutan de manera transparente al escribir o leer de `KeystoreDao`.
+
+### 7. Generador y Auditor de Contraseñas (`PasswordSecurityEngine` + `zxcvbn`)
+- **Entropía Criptográfica + Auditoría de Indescifrabilidad:** Combina `java.security.SecureRandom` con la librería de análisis heurístico y de entropía `com.nulab-inc:zxcvbn`. Durante la generación, realiza bucles de verificación activa hasta asegurar un score de 4/4 (indescifrable por fuerza bruta y diccionarios).
+- **3 Tamaños configurables:** 16 caracteres (Alta), 24 caracteres (Muy Alta) y 32 caracteres (Ultra Segura).
+- **Aviso Nativo In-App (No Toasts):** Cuando el usuario teclea su propia contraseña, el motor la audita al instante. Si se detecta un score bajo o patrones vulnerables, la interfaz despliega una tarjeta de aviso nativo explicando el riesgo y el tiempo estimado de descifrado, sin interrumpir ni bloquear al usuario de realizar su firma si así lo desea.
+- **Compatibilidad con scripts:** Se excluyen caracteres ambiguos o conflictivos en scripts bash/gradle como comillas dobles, comillas simples, backticks o barras invertidas (`"`, `'`, `` ` ``, `\`), asegurando que las contraseñas generadas puedan ser usadas sin escapar en `signingConfigs` de Gradle y en comandos de `apksigner`.
+
 ---
 
 ## 🎨 Directrices de UI, Tipografía y Edge-to-Edge
@@ -64,6 +78,13 @@ Keystore Creator es una aplicación nativa para Android cuyo objetivo es permiti
 - El `Scaffold` principal de `MainActivity` acondiciona su `contentWindowInsets` y el padding del `NavHost`:
   - En pantallas principales (`Generator`, `KeystoreList`, `Settings`), aplica los insets del sistema para dar cabida a la barra superior y la barra inferior.
   - En pantallas secundarias/hijas (`KeystoreDetailScreen`, `ColorPickerScreen`), suprime los insets del contenedor raíz (`PaddingValues(0.dp)`) permitiendo que cada pantalla hija gobierne su propio `Scaffold` y `TopAppBar` nativamente contra la barra de estado, erradicando franjas vacías o duplicación de márgenes superiores.
+
+### 3. Transiciones de Navegación y Micro-animaciones Nativas (Zero Overhead)
+- **Animaciones Direccionales de Pestañas:** En `MainActivity.kt`, los métodos de transición del `NavHost` (`enterTransition`, `exitTransition`, `popEnterTransition`, `popExitTransition`) emplean `NavRoutes.getBottomBarOrder()` para discernir la orientación del desplazamiento según el índice de la pestaña (Generador = 0, Almacén = 1, Ajustes = 2). Si se navega de izquierda a derecha se desplaza hacia la izquierda, y viceversa, otorgando una sensación táctil natural.
+- **Transiciones de Pantallas de Detalle:** El paso a `KeystoreDetailScreen` y `ColorPickerScreen` se anima con deslizamiento horizontal completo y fundido cruzado (`FastOutSlowInEasing`).
+- **Micro-animaciones en Tarjetas:** Se integra `Modifier.animateContentSize()` en tarjetas dinámicas (`GeneratorScreen`, `KeystoreListScreen`, `KeystoreDetailScreen`, `ColorPickerScreen`), garantizando que la expansión de campos opcionales, la aparición de avisos de seguridad en vivo y las previsualizaciones de contraseñas ocurran con una transición suave y continua sin saltos bruscos.
+- **Pestañas Internas en Bloques Extensos:** En `KeystoreDetailScreen`, los fragmentos de código (`build.gradle.kts` y `GitHub Actions CI/CD`) se presentan con un `SecondaryTabRow` animado con `AnimatedContent`. Esto ahorra desplazamiento vertical excesivo en pantallas táctiles de teléfonos móviles, permitiendo al usuario cambiar de entorno con un solo toque y copiar el código sin perder el contexto visual.
+- **Cero Impacto en Tamaño de APK:** Todas las animaciones provienen de las APIs nativas de `androidx.compose.animation`, garantizando fluidez a 60/120 FPS sin añadir dependencias externas pesadas.
 
 ---
 

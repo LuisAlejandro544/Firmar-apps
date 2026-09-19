@@ -100,6 +100,7 @@ dependencies {
   implementation(libs.androidx.room.runtime)
   implementation(libs.bouncycastle.bcprov)
   implementation(libs.bouncycastle.bcpkix)
+  implementation(libs.zxcvbn)
   // implementation(libs.coil.compose)
   implementation(libs.converter.moshi)
   implementation(libs.firebase.ai)

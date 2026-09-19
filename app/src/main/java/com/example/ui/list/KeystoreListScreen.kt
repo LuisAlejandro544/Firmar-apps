@@ -1,6 +1,7 @@
 package com.example.ui.list
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
@@ -207,6 +208,7 @@ private fun KeystoreItemCard(
     Card(
         modifier = modifier
             .fillMaxWidth()
+            .animateContentSize()
             .clip(RoundedCornerShape(16.dp))
             .clickable(onClick = onClick)
             .testTag("keystore_card_${keystore.id}"),

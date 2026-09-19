@@ -11,18 +11,33 @@ Una aplicación móvil moderna desarrollada en **Kotlin** y **Jetpack Compose** 
   - **Soporte Dual de Formatos (`.jks` y `.keystore`):** Selector de extensión estándar Android o clásico/Flutter, con autocompletado y detección inteligente de nombres para que el usuario escriba lo que desee sin preocuparse por escribir la extensión a mano.
   - **Validez Granular de 1 Día a 100 Años con Slider Interactivo:** Control deslizante continuo que permite fijar la validez desde 1 día (ideal para pruebas temporales o debug) hasta 100 años (llaves de producción de largo plazo), con cálculo de fecha de caducidad en tiempo real y accesos rápidos (1 día, 30 días, 1 año, 25 años, 30 años, 100 años).
   - Firma digital con algoritmo `SHA256withRSA` utilizando el proveedor de seguridad nativo de Android.
+  - **Generador y Auditor de Contraseñas Ultra Seguras con Motor zxcvbn:**
+    - Botón táctil ergonómico con varita mágica al lado de los campos de contraseña en el formulario móvil.
+    - Diálogo interactivo con 3 opciones de longitud criptográfica: **16 caracteres** (Alta), **24 caracteres** (Muy Alta) y **32 caracteres** (Ultra Segura).
+    - Generación asistida con reintentos automáticos y certificación obligatoria de **Indescifrabilidad (Score 4/4)** mediante la biblioteca estándar de auditoría `zxcvbn`. Se excluyen patrones de teclado, nombres y palabras de diccionario.
+    - 100% compatibles con scripts de Gradle, Android Studio y apksigner (sin caracteres problemáticos para bash).
+    - **Avisos Nativos de Seguridad en Vivo (Sin Toasts):** Si el usuario ingresa manualmente una contraseña vulnerable o descifrable, la app muestra un componente nativo de advertencia explicativo con el tiempo estimado de descifrado, aconsejando robustecerla pero permitiendo continuar con la firma sin bloqueos forzados.
+    - Medidor dinámico de fortaleza en tiempo real con barra de progreso visual de color según nivel de entropía.
+    - Botón de regeneración instantánea y vista previa monoespaciada para revisión en pantalla.
   - Campos opcionales del certificado (CN, OU, O, C) con sección colapsable.
   - Opción de "Misma contraseña para la clave" para mayor comodidad al escribir en el teléfono.
   - Botón de **Datos de prueba** para validaciones instantáneas.
 
+- **Cifrado Fuerte de Credenciales en Reposo (Android KeyStore + AES-256-GCM):**
+  - **Protección Criptográfica en la Base de Datos:** Las contraseñas nunca se guardan en texto plano en la memoria flash del teléfono ni en SQLite.
+  - Cada credencial se cifra de forma transparente mediante **AES-256 en modo GCM (Galois/Counter Mode)** con un Vector de Inicialización (IV) de 12 bytes aleatorio y una etiqueta de autenticación (Tag) de 128 bits para prevenir manipulaciones.
+  - La clave maestra está resguardada en el hardware seguro del dispositivo (**Android KeyStore Provider**, respaldado por TEE / StrongBox), impidiendo que otras aplicaciones o volcados del sistema de archivos puedan acceder a las contraseñas sin autorización criptográfica del procesador.
+  - Compatibilidad total hacia atrás con registros previos no cifrados.
+
 - **Gestión Local Segura (Room Database):**
-  - Registro de todas las keystores creadas con sus credenciales (alias, contraseñas protegidas).
+  - Registro de todas las keystores creadas con sus credenciales (alias, contraseñas protegidas con cifrado fuerte).
   - Visualización del tamaño del archivo, fecha de creación y algoritmo empleado.
   - Buscador rápido en tiempo real por título, nombre de archivo o alias.
   - Eliminación segura que limpia tanto la base de datos como el archivo físico del almacenamiento interno.
 
 - **Detalles y Exportación para Firma de APKs:**
   - Cálculo automático y copia en 1 toque de huellas digitales **SHA-256** y **SHA-1** (vitales para Firebase, Google Sign-In, Play Console, etc.).
+  - **Navegación por Pestañas para Códigos de Integración (`build.gradle.kts` ⟷ GitHub Actions CI/CD):** En la pantalla de detalles, los fragmentos de código de compilación y despliegue están organizados mediante un selector de pestañas (`SecondaryTabRow`) con transiciones animadas laterales (`AnimatedContent`), permitiendo consultar y copiar tanto la configuración de Gradle como el pipeline de GitHub Actions de forma inmediata sin tener que desplazarse verticalmente por la pantalla.
   - Generador de bloques de configuración listos para `build.gradle.kts` y comandos de `apksigner`.
   - **Workflow Completo de GitHub Actions CI/CD en 1 Clic:** Generador de pipeline completo de integración continua listo para pegar en `.github/workflows/build-and-sign.yml`. Incluye todos los datos ya pre-rellenados para la clave seleccionada: nombre de archivo (`.jks` o `.keystore`), alias, variables de entorno de firma, decodificación Base64 desde secretos, compilación con Gradle y firma verificada con apksigner.
   - **Generación de Base64 con 1 Clic (CI/CD):** Conversión directa del almacén de claves a texto codificado en Base64 para su uso inmediato en variables de entorno como `ANDROID_KEYSTORE_BASE64` en GitHub Actions o pipelines de CI/CD. Incluye opciones para copiar la cadena, compartir texto o exportar como archivo físico `.base64`.
@@ -43,6 +58,10 @@ Una aplicación móvil moderna desarrollada en **Kotlin** y **Jetpack Compose** 
   - **Persistencia Reactiva:** Cambios guardados al instante con `ThemePreferences` y propagados fluidamente por toda la app mediante `ThemeViewModel`.
   - **Tipografía y Escala de Fuente Fija (`fontScale = 1.0f`):** Se desacopla la escala de texto de la configuración de accesibilidad del teléfono para proteger el diseño visual, evitando rupturas, cortes de palabras o desbordamientos en tarjetas y botones, manteniendo intacta la escala de píxeles por densidad.
   - **Alineación Edge-to-Edge Perfeccionada:** Gestión de insets sin duplicación en pantallas secundarias (`KeystoreDetailScreen`, `ColorPickerScreen`), garantizando barras superiores perfectamente pegadas a la barra de estado sin espacios vacíos.
+  - **Sistema de Transiciones y Micro-animaciones Nativas (Jetpack Compose):**
+    - **Navegación Fluida entre Pestañas:** Transición con deslizamiento direccional (`slideInHorizontally` / `slideOutHorizontally` + `fadeIn` / `fadeOut`) y curvas de aceleración `FastOutSlowInEasing` que responden a la posición relativa de las pestañas (Generador ⟷ Almacén / Historial ⟷ Ajustes).
+    - **Navegación en Profundidad (Detalles y Selectores):** Entrada y salida con deslizamiento horizontal natural al abrir el detalle de una keystore o el selector de color de tema.
+    - **Micro-animaciones Reactivas en Tarjetas (`animateContentSize`):** Expansión y contracción suave y progresiva en tarjetas de formulario, credenciales cifradas, exportación Base64 y generación de contraseñas, evitando cambios bruscos de altura en la interfaz táctil.
 
 - **Crypto Lab: Herramientas de Depuración y Auditoría Independientes:**
   - **Doble Lanzador en el Sistema:** Dispone de su propia actividad independiente (`DebugToolsActivity`) con icono dedicado en el cajón de aplicaciones de Android ("Crypto Lab (Debug)") y acceso directo desde los Ajustes de la aplicación.
@@ -87,7 +106,9 @@ Una aplicación móvil moderna desarrollada en **Kotlin** y **Jetpack Compose** 
 | **Interfaz de Usuario** | Jetpack Compose (Material 3) |
 | **Arquitectura** | MVVM (Model-View-ViewModel) con Flow reactivo |
 | **Base de Datos Local** | AndroidX Room con KSP |
-| **Criptografía** | Bouncy Castle (`bcprov-jdk18on`, `bcpkix-jdk18on`) + Conscrypt Android |
+| **Cifrado en Reposo** | Android KeyStore + AES-256-GCM (Hardware TEE/StrongBox) |
+| **Generador de Entropía** | SecureRandom (Criptográficamente Seguro, 16/24/32 caracteres) |
+| **Criptografía X.509/PKCS12** | Bouncy Castle (`bcprov-jdk18on`, `bcpkix-jdk18on`) + Conscrypt Android |
 | **Navegación** | Navigation Compose |
 | **Compartición de Archivos** | AndroidX FileProvider |
 

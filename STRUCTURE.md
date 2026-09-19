@@ -32,7 +32,9 @@ app/src/main/
 │   │
 │   ├── crypto/                          # Motor Criptográfico y Utilidades
 │   │   ├── KeystoreGenerator.kt         # Generador de pares de claves RSA y certificados X.509
-│   │   └── KeystoreExportHelper.kt      # Compartición mediante FileProvider, copias y snippets
+│   │   ├── KeystoreExportHelper.kt      # Compartición mediante FileProvider, copias y snippets
+│   │   ├── SecureCredentialsCipher.kt   # Cifrado AES-256-GCM respaldado por Android KeyStore (hardware TEE)
+│   │   └── PasswordSecurityEngine.kt    # Generador de contraseñas de alta entropía (16, 24, 32 caracteres)
 │   │
 │   ├── data/                            # Capa de Persistencia y Modelos
 │   │   ├── dao/
@@ -42,7 +44,7 @@ app/src/main/
 │   │   ├── model/
 │   │   │   └── KeystoreEntity.kt        # Entidad de tabla con credenciales y metadatos
 │   │   └── repository/
-│   │       └── KeystoreRepository.kt    # Unifica base de datos con limpieza en el sistema de archivos
+│   │       └── KeystoreRepository.kt    # Capa intermedia con cifrado transparente en SQLite y limpieza en disco
 │   │
 │   └── ui/                              # Capa de Presentación (Jetpack Compose)
 │       ├── detail/
@@ -88,6 +90,8 @@ app/src/main/
 
 ### 1. `crypto/`
 * **`KeystoreGenerator.kt`**: Implementa la lógica criptográfica sin depender de `keytool` de PC. Crea claves RSA de 2048/4096 bits, emite certificados X.509 v3 usando el proveedor nativo Conscrypt/Bouncy Castle, calcula la validez exacta en días (desde 1 día hasta 100 años), calcula huellas SHA-1 y SHA-256 en formato hexadecimal y guarda el archivo (`.jks` o `.keystore`) en el almacenamiento interno de la app (`filesDir/keystores/`).
+* **`SecureCredentialsCipher.kt`**: Gestor de cifrado y descifrado de credenciales sensibles en reposo mediante **AES-256-GCM** autenticado, respaldado por hardware seguro a través de **Android KeyStore Provider** (TEE / StrongBox). Incorpora generación de IV de 12 bytes aleatorio, tag de autenticación de 128 bits, empaquetado Base64 multiplataforma y compatibilidad hacia atrás transparente con registros preexistentes en texto plano.
+* **`PasswordSecurityEngine.kt`**: Motor de generación y auditoría de contraseñas de alta entropía asistido por `SecureRandom` y el analizador de algoritmos de diccionario `zxcvbn`. Ofrece 3 longitudes estándar (16, 24 y 32 caracteres) con distribución garantizada de mayúsculas, minúsculas, dígitos y símbolos no ambiguos (evitando caracteres conflictivos en compilaciones de Gradle y terminales), asegurando score 4/4 (indescifrables). Incluye auditoría en tiempo real para alertar de forma nativa en la UI si el usuario introduce contraseñas vulnerables a descifrado.
 * **`KeystoreExportHelper.kt`**: Proporciona métodos para:
   - Compartir de forma segura el archivo físico con otras aplicaciones (vía `FileProvider` con permisos `FLAG_GRANT_READ_URI_PERMISSION`).
   - Convertir el archivo a texto **Base64** (`generateBase64`), compartirlo como texto plano o exportarlo como archivo `.base64`.
@@ -99,7 +103,7 @@ app/src/main/
 ### 2. `data/`
 * **`KeystoreEntity.kt`**: Modela los datos de la keystore: ID, título, nombre de archivo, ruta absoluta, alias, contraseñas, algoritmo, tamaño en bytes, validez en años y huellas.
 * **`KeystoreDao.kt`**: Consultas Room para inserción, lectura ordenada por fecha descendente, búsqueda por ID y borrado.
-* **`KeystoreRepository.kt`**: Repositorio que sincroniza Room con el disco: al borrar un registro, elimina también el archivo físico para no saturar la memoria del teléfono.
+* **`KeystoreRepository.kt`**: Repositorio central que intercepta todas las operaciones: cifra las contraseñas con `SecureCredentialsCipher` antes de persistir en Room, las descifra al vuelo al consultarlas, y al borrar un registro elimina de forma segura el archivo físico del disco para no saturar la memoria del teléfono.
 
 ### 3. `ui/`
 * **`MainActivity.kt`**: Contenedor principal con `NavHost`, `CenterAlignedTopAppBar` y `NavigationBar`. Implementa acondicionamiento quirúrgico de `contentWindowInsets` para que pantallas secundarias (`KeystoreDetailScreen`, `ColorPickerScreen`) gobiernen su propio `Scaffold` y `TopAppBar` pegados a la barra de estado, sin duplicación de insets ni espacios residuales.

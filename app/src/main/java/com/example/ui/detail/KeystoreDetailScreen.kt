@@ -1,10 +1,15 @@
 package com.example.ui.detail
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -33,9 +38,11 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.IntegrationInstructions
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.AlertDialog
@@ -51,8 +58,13 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SecondaryTabRow
 import androidx.compose.material3.SuggestionChip
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRowDefaults
+import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -103,6 +115,8 @@ fun KeystoreDetailScreen(
 
     val context = LocalContext.current
     var showDeleteConfirm by remember { mutableStateOf(false) }
+    // Estado para la navegación por pestañas del bloque de códigos de integración (0 = Gradle, 1 = CI/CD)
+    var selectedCodeSnippetTab by remember { mutableStateOf(0) }
 
     LaunchedEffect(keystoreId) {
         viewModel.loadKeystore(keystoreId)
@@ -213,6 +227,7 @@ fun KeystoreDetailScreen(
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .animateContentSize()
                             .testTag("detail_credentials_card"),
                         shape = RoundedCornerShape(16.dp),
                         colors = CardDefaults.cardColors(
@@ -298,6 +313,7 @@ fun KeystoreDetailScreen(
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .animateContentSize()
                             .testTag("detail_base64_card"),
                         shape = RoundedCornerShape(16.dp),
                         colors = CardDefaults.cardColors(
@@ -536,11 +552,13 @@ fun KeystoreDetailScreen(
                         }
                     }
 
-                    // Tarjeta 5: Configuración de Firma para Gradle
+                    // Sección de Códigos y Scripts de Integración con Navegación por Pestañas
+                    // Permite alternar entre Gradle y GitHub Actions sin tener que hacer scroll vertical innecesario
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .testTag("detail_gradle_snippet_card"),
+                            .animateContentSize()
+                            .testTag("detail_integration_code_card"),
                         shape = RoundedCornerShape(16.dp),
                         colors = CardDefaults.cardColors(
                             containerColor = MaterialTheme.colorScheme.surface
@@ -549,115 +567,186 @@ fun KeystoreDetailScreen(
                     ) {
                         Column(
                             modifier = Modifier.padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                            verticalArrangement = Arrangement.spacedBy(14.dp)
                         ) {
+                            // Cabecera de la sección
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Icon(Icons.Default.Code, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                                Text(
-                                    text = "Código para build.gradle.kts",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold
+                                Icon(
+                                    imageVector = Icons.Default.Terminal,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary
                                 )
-                            }
-
-                            val snippet = KeystoreExportHelper.generateGradleKtsSnippet(currentKeystore)
-
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
-                                    .padding(12.dp)
-                            ) {
                                 Text(
-                                    text = snippet,
-                                    style = MaterialTheme.typography.bodySmall.copy(
-                                        fontFamily = FontFamily.Monospace,
-                                        fontSize = 12.sp
-                                    )
-                                )
-                            }
-
-                            Button(
-                                onClick = {
-                                    viewModel.copyNonSensitiveValue(context, "Bloque Gradle", snippet)
-                                },
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("Copiar Configuración de Gradle")
-                            }
-                        }
-                    }
-
-                    // Card 6: Workflow pre-configurado para GitHub Actions CI/CD
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("detail_github_action_card"),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surface
-                        ),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Icon(Icons.Default.Code, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                                Text(
-                                    text = "Workflow GitHub Actions CI/CD",
+                                    text = "Códigos de Integración y Despliegue",
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold
                                 )
                             }
 
                             Text(
-                                text = "Pipeline listo para producción (.github/workflows/build-and-sign.yml) con los datos de esta llave ya pre-rellenados: archivo '${currentKeystore.fileName}', alias '${currentKeystore.alias}', restauración desde Base64, compilación y firma con apksigner.",
+                                text = "Selecciona el entorno para ver y copiar el fragmento de configuración listo para tu proyecto:",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
 
-                            val ghWorkflow = KeystoreExportHelper.generateFullGitHubActionWorkflow(currentKeystore)
-
-                            Box(
+                            // Selector de pestañas para alternar entre Gradle y CI/CD
+                            SecondaryTabRow(
+                                selectedTabIndex = selectedCodeSnippetTab,
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                                contentColor = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .heightIn(max = 240.dp)
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
-                                    .verticalScroll(rememberScrollState())
-                                    .padding(12.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .testTag("code_snippet_tab_row")
                             ) {
-                                Text(
-                                    text = ghWorkflow,
-                                    style = MaterialTheme.typography.bodySmall.copy(
-                                        fontFamily = FontFamily.Monospace,
-                                        fontSize = 11.sp
-                                    )
+                                Tab(
+                                    selected = selectedCodeSnippetTab == 0,
+                                    onClick = { selectedCodeSnippetTab = 0 },
+                                    modifier = Modifier.testTag("tab_gradle_snippet"),
+                                    text = {
+                                        Text(
+                                            text = "build.gradle.kts",
+                                            fontWeight = if (selectedCodeSnippetTab == 0) FontWeight.Bold else FontWeight.Normal,
+                                            fontSize = 13.sp
+                                        )
+                                    },
+                                    icon = {
+                                        Icon(
+                                            imageVector = Icons.Default.Code,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                )
+                                Tab(
+                                    selected = selectedCodeSnippetTab == 1,
+                                    onClick = { selectedCodeSnippetTab = 1 },
+                                    modifier = Modifier.testTag("tab_github_actions"),
+                                    text = {
+                                        Text(
+                                            text = "GitHub Actions CI/CD",
+                                            fontWeight = if (selectedCodeSnippetTab == 1) FontWeight.Bold else FontWeight.Normal,
+                                            fontSize = 13.sp
+                                        )
+                                    },
+                                    icon = {
+                                        Icon(
+                                            imageVector = Icons.Default.IntegrationInstructions,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
                                 )
                             }
 
-                            Button(
-                                onClick = {
-                                    viewModel.copyNonSensitiveValue(context, "Workflow GitHub Actions", ghWorkflow)
+                            // Contenido animado según la pestaña seleccionada
+                            AnimatedContent(
+                                targetState = selectedCodeSnippetTab,
+                                transitionSpec = {
+                                    if (targetState > initialState) {
+                                        (slideInHorizontally { width -> width } + fadeIn()).togetherWith(
+                                            slideOutHorizontally { width -> -width } + fadeOut()
+                                        )
+                                    } else {
+                                        (slideInHorizontally { width -> -width } + fadeIn()).togetherWith(
+                                            slideOutHorizontally { width -> width } + fadeOut()
+                                        )
+                                    }
                                 },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .testTag("copy_github_action_button")
-                            ) {
-                                Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("Copiar Workflow Completo de GitHub Actions")
+                                label = "CodeSnippetTabContentTransition"
+                            ) { targetTab ->
+                                if (targetTab == 0) {
+                                    // Pestaña 0: Configuración para Gradle Kotlin DSL
+                                    Column(
+                                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text(
+                                            text = "Bloque de signingConfigs para agregar a 'app/build.gradle.kts':",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+
+                                        val snippet = KeystoreExportHelper.generateGradleKtsSnippet(currentKeystore)
+
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clip(RoundedCornerShape(8.dp))
+                                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
+                                                .padding(12.dp)
+                                        ) {
+                                            Text(
+                                                text = snippet,
+                                                style = MaterialTheme.typography.bodySmall.copy(
+                                                    fontFamily = FontFamily.Monospace,
+                                                    fontSize = 12.sp
+                                                )
+                                            )
+                                        }
+
+                                        Button(
+                                            onClick = {
+                                                viewModel.copyNonSensitiveValue(context, "Bloque Gradle", snippet)
+                                            },
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .testTag("copy_gradle_button")
+                                        ) {
+                                            Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text("Copiar Configuración de Gradle")
+                                        }
+                                    }
+                                } else {
+                                    // Pestaña 1: Workflow para GitHub Actions CI/CD
+                                    Column(
+                                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text(
+                                            text = "Pipeline completo listo para producción (.github/workflows/build-and-sign.yml) con los datos de esta llave ya pre-rellenados:",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+
+                                        val ghWorkflow = KeystoreExportHelper.generateFullGitHubActionWorkflow(currentKeystore)
+
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .heightIn(max = 240.dp)
+                                                .clip(RoundedCornerShape(8.dp))
+                                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
+                                                .verticalScroll(rememberScrollState())
+                                                .padding(12.dp)
+                                        ) {
+                                            Text(
+                                                text = ghWorkflow,
+                                                style = MaterialTheme.typography.bodySmall.copy(
+                                                    fontFamily = FontFamily.Monospace,
+                                                    fontSize = 11.sp
+                                                )
+                                            )
+                                        }
+
+                                        Button(
+                                            onClick = {
+                                                viewModel.copyNonSensitiveValue(context, "Workflow GitHub Actions", ghWorkflow)
+                                            },
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .testTag("copy_github_action_button")
+                                        ) {
+                                            Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text("Copiar Workflow Completo de GitHub Actions")
+                                        }
+                                    }
+                                }
                             }
                         }
                     }

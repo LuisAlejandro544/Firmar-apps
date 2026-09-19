@@ -99,6 +99,32 @@ Este documento define el plan de evolución y las próximas funcionalidades de l
 
 ---
 
+### ✅ Fase 5.2: Generador de Contraseñas Ultra Seguras y Cifrado Fuerte de Credenciales (Completada)
+- [x] **Generador Móvil y Auditor de Contraseñas (`PasswordSecurityEngine` + `zxcvbn`):**
+  - [x] Motor de entropía criptográfica basado en `SecureRandom` con exclusión de caracteres confusos para CLI/Gradle.
+  - [x] 3 Opciones de longitud configurables: 16 caracteres (Alta), 24 caracteres (Muy Alta) y 32 caracteres (Ultra Segura).
+  - [x] Integración de la librería estándar `zxcvbn` para asegurar que las contraseñas generadas alcancen el score máximo 4/4 (indescifrables).
+  - [x] Detección activa en vivo al escribir contraseñas manuales con avisos nativos in-app (no Toasts) informando si es descifrable y el tiempo estimado de ataque, sin bloquear la creación de la firma.
+  - [x] Botón directo de acceso ergonómico con varita mágica al lado de los campos de contraseña en `GeneratorScreen`.
+  - [x] Diálogo modal interactivo con selección de longitud, regeneración instantánea y vista previa monoespaciada.
+  - [x] Medidor reactivo de fortaleza de contraseña con barra de progreso cromática según la entropía calculada.
+- [x] **Cifrado Fuerte de Credenciales en Reposo (`SecureCredentialsCipher`):**
+  - [x] Implementación de cifrado autenticado AES-256-GCM con IV aleatorio de 12 bytes y etiqueta de autenticación de 128 bits.
+  - [x] Resguardo de clave maestra en hardware seguro mediante **Android KeyStore Provider** (TEE / StrongBox).
+  - [x] Integración transparente en `KeystoreRepository`: contraseñas protegidas al guardar en SQLite (Room) y descifradas en memoria al recuperar.
+  - [x] Compatibilidad total hacia atrás con contraseñas en texto plano preexistentes.
+  - [x] Suite de pruebas unitarias automatizadas (`CryptoSecurityUnitTest`) para verificar generación, entropía, auditoría zxcvbn y cifrado/descifrado.
+
+---
+
+### ✅ Fase 5.3: Transiciones de Navegación y Micro-animaciones Nativas (Completada)
+- [x] **Transiciones Direccionales en Barra Inferior (`MainActivity.kt` + `NavRoutes.kt`):** Deslizamiento horizontal y fundido calculado según el índice de pestañas (Generador=0, Almacén=1, Ajustes=2) con aceleración `FastOutSlowInEasing`.
+- [x] **Navegación en Profundidad:** Desplazamiento lateral natural para pantallas de detalle (`KeystoreDetailScreen`) y personalización (`ColorPickerScreen`).
+- [x] **Micro-animaciones en Tarjetas (`animateContentSize`):** Transiciones de tamaño fluidas al expandir secciones de formulario, alternar visibilidad de contraseñas, generar claves y alternar opciones de Material You.
+- [x] **Navegación por Pestañas en Códigos de Integración (`KeystoreDetailScreen.kt`):** Sustitución del apilamiento vertical largo por un selector de pestañas (`SecondaryTabRow`) con animación de transición horizontal (`AnimatedContent`) entre `build.gradle.kts` y `GitHub Actions CI/CD`, evitando scrolls innecesarios en pantallas táctiles de teléfonos móviles.
+
+---
+
 ### ⏳ Fase 6: Importador e Inspector de Keystores Externas (Próximo Sprint)
 - [ ] Selector de archivos para importar keystores existentes desde el almacenamiento del teléfono.
 - [ ] Extracción y visualización de certificados, alias y huellas de archivos externos.

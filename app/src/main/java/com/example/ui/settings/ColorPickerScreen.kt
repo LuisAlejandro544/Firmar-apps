@@ -1,5 +1,6 @@
 package com.example.ui.settings
 
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -192,7 +193,9 @@ fun ColorPickerScreen(
 
             // 2. OPCIÓN MATERIAL YOU (Color Dinámico en Android 12+)
             Card(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .animateContentSize(),
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(
                     containerColor = if (themeSettings.useDynamicColor)

@@ -1,6 +1,7 @@
 package com.example.ui.generator
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -31,11 +32,15 @@ import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Public
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Title
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -43,9 +48,12 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -61,6 +69,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -68,6 +77,10 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.crypto.KeystoreExportHelper
+import com.example.crypto.PasswordAuditResult
+import com.example.crypto.PasswordLengthOption
+import com.example.crypto.PasswordSecurityEngine
+import com.example.crypto.PasswordStrength
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
@@ -277,7 +290,9 @@ fun GeneratorScreen(
 
             // Sección 2: Credenciales y Contraseñas
             Card(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .animateContentSize(),
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surface
@@ -288,39 +303,163 @@ fun GeneratorScreen(
                     modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Text(
-                        text = "2. Seguridad y Contraseñas",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "2. Seguridad y Contraseñas",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
 
-                    OutlinedTextField(
-                        value = state.storePassword,
-                        onValueChange = { viewModel.onStorePasswordChange(it) },
-                        label = { Text("Contraseña del Keystore") },
-                        placeholder = { Text("Mínimo 6 caracteres") },
-                        leadingIcon = {
-                            Icon(Icons.Default.Lock, contentDescription = null)
-                        },
-                        trailingIcon = {
-                            IconButton(
-                                onClick = { viewModel.toggleStorePasswordVisibility() },
-                                modifier = Modifier.testTag("toggle_store_pass_visibility")
+                        TextButton(
+                            onClick = { viewModel.openPasswordGeneratorDialog("store") },
+                            modifier = Modifier.testTag("generate_secure_password_header_btn")
+                        ) {
+                            Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Generar Segura")
+                        }
+                    }
+
+                    // Campo de contraseña del Keystore con botón generador al lado
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedTextField(
+                            value = state.storePassword,
+                            onValueChange = { viewModel.onStorePasswordChange(it) },
+                            label = { Text("Contraseña del Keystore") },
+                            placeholder = { Text("Mínimo 6 caracteres") },
+                            leadingIcon = {
+                                Icon(Icons.Default.Lock, contentDescription = null)
+                            },
+                            trailingIcon = {
+                                IconButton(
+                                    onClick = { viewModel.toggleStorePasswordVisibility() },
+                                    modifier = Modifier.testTag("toggle_store_pass_visibility")
+                                ) {
+                                    Icon(
+                                        imageVector = if (state.isStorePasswordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                        contentDescription = "Mostrar contraseña"
+                                    )
+                                }
+                            },
+                            visualTransformation = if (state.isStorePasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag("store_password_input"),
+                            singleLine = true
+                        )
+
+                        // Botón táctil al lado de la contraseña para generar ultra segura
+                        FilledTonalIconButton(
+                            onClick = { viewModel.openPasswordGeneratorDialog("store") },
+                            modifier = Modifier
+                                .size(52.dp)
+                                .testTag("generate_store_pass_btn"),
+                            colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.AutoAwesome,
+                                contentDescription = "Generar contraseña ultra segura para Keystore"
+                            )
+                        }
+                    }
+
+                    // Indicador de fortaleza y auditoría zxcvbn en tiempo real
+                    if (state.storePassword.isNotEmpty()) {
+                        val audit = remember(state.storePassword) {
+                            PasswordSecurityEngine.auditPassword(state.storePassword)
+                        }
+                        val strengthColor = when (audit.strength) {
+                            PasswordStrength.WEAK -> MaterialTheme.colorScheme.error
+                            PasswordStrength.MEDIUM -> MaterialTheme.colorScheme.tertiary
+                            PasswordStrength.STRONG -> MaterialTheme.colorScheme.primary
+                            PasswordStrength.ULTRA -> MaterialTheme.colorScheme.primary
+                        }
+
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Icon(
-                                    imageVector = if (state.isStorePasswordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                    contentDescription = "Mostrar contraseña"
+                                Text(
+                                    text = "Fortaleza: ${audit.strength.label}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.Medium,
+                                    color = strengthColor
+                                )
+                                Text(
+                                    text = "${state.storePassword.length} caracteres",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
-                        },
-                        visualTransformation = if (state.isStorePasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("store_password_input"),
-                        singleLine = true
-                    )
+                            LinearProgressIndicator(
+                                progress = { audit.strength.scorePercent },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(4.dp)
+                                    .clip(RoundedCornerShape(2.dp)),
+                                color = strengthColor,
+                                trackColor = MaterialTheme.colorScheme.surfaceVariant
+                            )
+
+                            // Advertencia nativa de la app si la contraseña es vulnerable o descifrable
+                            if (audit.isCrackableWarning) {
+                                Card(
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.65f)
+                                    ),
+                                    shape = RoundedCornerShape(10.dp),
+                                    modifier = Modifier.fillMaxWidth().testTag("store_pass_warning_card")
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(10.dp),
+                                        verticalAlignment = Alignment.Top,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.WarningAmber,
+                                            contentDescription = "Advertencia de seguridad",
+                                            tint = MaterialTheme.colorScheme.error,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                            Text(
+                                                text = "Aviso de seguridad (Contraseña vulnerable)",
+                                                style = MaterialTheme.typography.labelMedium,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.onErrorContainer
+                                            )
+                                            Text(
+                                                text = audit.warningMessage ?: "Esta contraseña podría ser descifrada con herramientas automatizadas. Puedes continuar generando la firma, pero te recomendamos usar el generador ultra seguro.",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onErrorContainer
+                                            )
+                                            Text(
+                                                text = "Tiempo estimado de descifrado: ${audit.crackTimeDisplay}",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = MaterialTheme.colorScheme.error
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
 
                     // Switch para usar la misma contraseña (muy cómodo en móvil)
                     Row(
@@ -354,39 +493,143 @@ fun GeneratorScreen(
                         enter = fadeIn() + expandVertically(),
                         exit = fadeOut() + shrinkVertically()
                     ) {
-                        OutlinedTextField(
-                            value = state.keyPassword,
-                            onValueChange = { viewModel.onKeyPasswordChange(it) },
-                            label = { Text("Contraseña individual de la clave") },
-                            placeholder = { Text("Mínimo 6 caracteres") },
-                            leadingIcon = {
-                                Icon(Icons.Default.Lock, contentDescription = null)
-                            },
-                            trailingIcon = {
-                                IconButton(
-                                    onClick = { viewModel.toggleKeyPasswordVisibility() },
-                                    modifier = Modifier.testTag("toggle_key_pass_visibility")
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                OutlinedTextField(
+                                    value = state.keyPassword,
+                                    onValueChange = { viewModel.onKeyPasswordChange(it) },
+                                    label = { Text("Contraseña individual de la clave") },
+                                    placeholder = { Text("Mínimo 6 caracteres") },
+                                    leadingIcon = {
+                                        Icon(Icons.Default.Lock, contentDescription = null)
+                                    },
+                                    trailingIcon = {
+                                        IconButton(
+                                            onClick = { viewModel.toggleKeyPasswordVisibility() },
+                                            modifier = Modifier.testTag("toggle_key_pass_visibility")
+                                        ) {
+                                            Icon(
+                                                imageVector = if (state.isKeyPasswordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                                contentDescription = "Mostrar contraseña"
+                                            )
+                                        }
+                                    },
+                                    visualTransformation = if (state.isKeyPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .testTag("key_password_input"),
+                                    singleLine = true
+                                )
+
+                                FilledTonalIconButton(
+                                    onClick = { viewModel.openPasswordGeneratorDialog("key") },
+                                    modifier = Modifier
+                                        .size(52.dp)
+                                        .testTag("generate_key_pass_btn"),
+                                    colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                                    )
                                 ) {
                                     Icon(
-                                        imageVector = if (state.isKeyPasswordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                        contentDescription = "Mostrar contraseña"
+                                        imageVector = Icons.Default.AutoAwesome,
+                                        contentDescription = "Generar contraseña ultra segura para clave"
                                     )
                                 }
-                            },
-                            visualTransformation = if (state.isKeyPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .testTag("key_password_input"),
-                            singleLine = true
-                        )
+                            }
+
+                            // Indicador y advertencia individual para keyPassword
+                            if (state.keyPassword.isNotEmpty()) {
+                                val keyAudit = remember(state.keyPassword) {
+                                    PasswordSecurityEngine.auditPassword(state.keyPassword)
+                                }
+                                val keyStrengthColor = when (keyAudit.strength) {
+                                    PasswordStrength.WEAK -> MaterialTheme.colorScheme.error
+                                    PasswordStrength.MEDIUM -> MaterialTheme.colorScheme.tertiary
+                                    PasswordStrength.STRONG -> MaterialTheme.colorScheme.primary
+                                    PasswordStrength.ULTRA -> MaterialTheme.colorScheme.primary
+                                }
+
+                                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = "Fortaleza clave: ${keyAudit.strength.label}",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            fontWeight = FontWeight.Medium,
+                                            color = keyStrengthColor
+                                        )
+                                        Text(
+                                            text = "${state.keyPassword.length} caracteres",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    LinearProgressIndicator(
+                                        progress = { keyAudit.strength.scorePercent },
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(4.dp)
+                                            .clip(RoundedCornerShape(2.dp)),
+                                        color = keyStrengthColor,
+                                        trackColor = MaterialTheme.colorScheme.surfaceVariant
+                                    )
+
+                                    if (keyAudit.isCrackableWarning) {
+                                        Card(
+                                            colors = CardDefaults.cardColors(
+                                                containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.65f)
+                                            ),
+                                            shape = RoundedCornerShape(10.dp),
+                                            modifier = Modifier.fillMaxWidth().testTag("key_pass_warning_card")
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.padding(10.dp),
+                                                verticalAlignment = Alignment.Top,
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.WarningAmber,
+                                                    contentDescription = "Advertencia clave",
+                                                    tint = MaterialTheme.colorScheme.error,
+                                                    modifier = Modifier.size(20.dp)
+                                                )
+                                                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                                    Text(
+                                                        text = "Aviso de seguridad en clave individual",
+                                                        style = MaterialTheme.typography.labelMedium,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = MaterialTheme.colorScheme.onErrorContainer
+                                                    )
+                                                    Text(
+                                                        text = keyAudit.warningMessage ?: "Contraseña vulnerable a descifrado. No se impedirá la firma, pero se recomienda robustecerla.",
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        color = MaterialTheme.colorScheme.onErrorContainer
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
 
             // Sección 3: Parámetros del Certificado y Clave
             Card(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .animateContentSize(),
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surface
@@ -723,6 +966,137 @@ fun GeneratorScreen(
                         Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(4.dp))
                         Text("Compartir")
+                    }
+                }
+            )
+        }
+
+        // Diálogo para generar contraseñas ultra seguras con 3 opciones de longitud
+        if (state.isPasswordGeneratorDialogOpen) {
+            AlertDialog(
+                onDismissRequest = { viewModel.closePasswordGeneratorDialog() },
+                icon = {
+                    Icon(
+                        imageVector = Icons.Default.Shield,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(36.dp)
+                    )
+                },
+                title = {
+                    Text(
+                        text = "Generar Contraseña Ultra Segura",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                },
+                text = {
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(14.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = "Selecciona la longitud de entropía criptográfica:",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+
+                        // 3 Opciones de longitud (16, 24, 32 caracteres)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            PasswordLengthOption.entries.forEach { option ->
+                                val isSelected = state.selectedPasswordLength == option.length
+                                FilterChip(
+                                    selected = isSelected,
+                                    onClick = { viewModel.onSelectPasswordLength(option.length) },
+                                    label = {
+                                        Column(
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            modifier = Modifier.padding(vertical = 4.dp)
+                                        ) {
+                                            Text(
+                                                text = "${option.length} chars",
+                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                                style = MaterialTheme.typography.labelMedium
+                                            )
+                                            Text(
+                                                text = option.securityBadge,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = if (isSelected) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    },
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .testTag("password_len_chip_${option.length}")
+                                )
+                            }
+                        }
+
+                        // Vista previa de la contraseña generada con botón de regeneración instantánea
+                        Card(
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant
+                            ),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .animateContentSize()
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    text = state.previewGeneratedPassword,
+                                    fontFamily = FontFamily.Monospace,
+                                    fontWeight = FontWeight.Bold,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .testTag("preview_generated_password_text")
+                                )
+                                IconButton(
+                                    onClick = { viewModel.regeneratePasswordPreview() },
+                                    modifier = Modifier.testTag("regenerate_password_button")
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Refresh,
+                                        contentDescription = "Generar otra variante"
+                                    )
+                                }
+                            }
+                        }
+
+                        // Nota de compatibilidad y seguridad
+                        Text(
+                            text = "🛡️ Auditada con motor zxcvbn: Certificada como Indescifrable (Score 4/4, sin palabras de diccionario ni patrones de teclado). 100% compatible con Gradle y apksigner.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = { viewModel.applyGeneratedPassword() },
+                        modifier = Modifier.testTag("apply_generated_password_button")
+                    ) {
+                        Text("Usar Contraseña")
+                    }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = { viewModel.closePasswordGeneratorDialog() },
+                        modifier = Modifier.testTag("cancel_password_generator_button")
+                    ) {
+                        Text("Cancelar")
                     }
                 }
             )

@@ -5,6 +5,9 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.crypto.KeystoreGenerator
 import com.example.crypto.KeystoreParams
+import com.example.crypto.PasswordLengthOption
+import com.example.crypto.PasswordSecurityEngine
+import com.example.crypto.PasswordStrength
 import com.example.data.database.AppDatabase
 import com.example.data.model.KeystoreEntity
 import com.example.data.repository.KeystoreRepository
@@ -16,7 +19,8 @@ import kotlinx.coroutines.launch
 
 /**
  * Estado UI del formulario de generación de keystore.
- * Soporta selección de formatos (.jks y .keystore), auto-detección de extensión
+ * Soporta selección de formatos (.jks y .keystore), auto-detección de extensión,
+ * generador integrado de contraseñas ultra seguras con 3 niveles de longitud (16, 24, 32 caracteres)
  * y rango de validez granular desde 1 día hasta 100 años.
  */
 data class GeneratorUiState(
@@ -38,7 +42,12 @@ data class GeneratorUiState(
     val isAdvancedSectionExpanded: Boolean = false,
     val isGenerating: Boolean = false,
     val createdKeystore: KeystoreEntity? = null,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    // Estados del diálogo y selector de contraseñas ultra seguras
+    val isPasswordGeneratorDialogOpen: Boolean = false,
+    val passwordGeneratorTarget: String = "store", // "store" o "key"
+    val selectedPasswordLength: Int = PasswordLengthOption.VERY_HIGH.length, // 24 caracteres por defecto
+    val previewGeneratedPassword: String = ""
 ) {
     /**
      * Nombre final del archivo combinado de forma limpia con la extensión seleccionada.
@@ -150,6 +159,103 @@ class GeneratorViewModel(application: Application) : AndroidViewModel(applicatio
     fun toggleStorePasswordVisibility() = _uiState.update { it.copy(isStorePasswordVisible = !it.isStorePasswordVisible) }
     fun toggleKeyPasswordVisibility() = _uiState.update { it.copy(isKeyPasswordVisible = !it.isKeyPasswordVisible) }
     fun toggleAdvancedSection() = _uiState.update { it.copy(isAdvancedSectionExpanded = !it.isAdvancedSectionExpanded) }
+
+    /**
+     * Abre el diálogo interactivo para generar contraseñas ultra seguras con 3 opciones de longitud.
+     * @param target "store" para la contraseña del keystore, o "key" para la contraseña individual de la clave.
+     */
+    fun openPasswordGeneratorDialog(target: String = "store") {
+        val currentLength = _uiState.value.selectedPasswordLength
+        val generated = PasswordSecurityEngine.generateSecurePassword(currentLength)
+        _uiState.update {
+            it.copy(
+                isPasswordGeneratorDialogOpen = true,
+                passwordGeneratorTarget = target,
+                previewGeneratedPassword = generated
+            )
+        }
+    }
+
+    /** Cierra el diálogo del generador de contraseñas */
+    fun closePasswordGeneratorDialog() = _uiState.update { it.copy(isPasswordGeneratorDialogOpen = false) }
+
+    /** Cambia la opción de longitud (16, 24 o 32 caracteres) y regenera inmediatamente */
+    fun onSelectPasswordLength(length: Int) {
+        val generated = PasswordSecurityEngine.generateSecurePassword(length)
+        _uiState.update {
+            it.copy(
+                selectedPasswordLength = length,
+                previewGeneratedPassword = generated
+            )
+        }
+    }
+
+    /** Regenera otra contraseña de la misma longitud seleccionada */
+    fun regeneratePasswordPreview() {
+        val currentLength = _uiState.value.selectedPasswordLength
+        val generated = PasswordSecurityEngine.generateSecurePassword(currentLength)
+        _uiState.update { it.copy(previewGeneratedPassword = generated) }
+    }
+
+    /**
+     * Aplica la contraseña generada al campo correspondiente (y al alias si 'useSamePassword' está activo).
+     */
+    fun applyGeneratedPassword() {
+        val password = _uiState.value.previewGeneratedPassword
+        val target = _uiState.value.passwordGeneratorTarget
+        _uiState.update { current ->
+            if (target == "store") {
+                if (current.useSamePassword) {
+                    current.copy(
+                        storePassword = password,
+                        keyPassword = password,
+                        isStorePasswordVisible = true,
+                        isPasswordGeneratorDialogOpen = false
+                    )
+                } else {
+                    current.copy(
+                        storePassword = password,
+                        isStorePasswordVisible = true,
+                        isPasswordGeneratorDialogOpen = false
+                    )
+                }
+            } else {
+                current.copy(
+                    keyPassword = password,
+                    isKeyPasswordVisible = true,
+                    isPasswordGeneratorDialogOpen = false
+                )
+            }
+        }
+    }
+
+    /**
+     * Generación directa y rápida de contraseña ultra segura con longitud especificada.
+     */
+    fun generateQuickSecurePassword(length: Int = 24, target: String = "store") {
+        val password = PasswordSecurityEngine.generateSecurePassword(length)
+        _uiState.update { current ->
+            if (target == "store") {
+                if (current.useSamePassword) {
+                    current.copy(
+                        storePassword = password,
+                        keyPassword = password,
+                        isStorePasswordVisible = true
+                    )
+                } else {
+                    current.copy(
+                        storePassword = password,
+                        isStorePasswordVisible = true
+                    )
+                }
+            } else {
+                current.copy(
+                    keyPassword = password,
+                    isKeyPasswordVisible = true
+                )
+            }
+        }
+    }
 
     fun dismissSuccessDialog() = _uiState.update { it.copy(createdKeystore = null) }
     fun clearError() = _uiState.update { it.copy(errorMessage = null) }

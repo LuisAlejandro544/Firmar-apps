@@ -48,4 +48,17 @@ object AppRoutes {
     const val COLOR_THEME = "settings_color_theme"
 
     fun createDetailRoute(keystoreId: Long): String = "keystore_detail/$keystoreId"
+
+    /**
+     * Retorna el índice de posición en la barra de navegación inferior para
+     * determinar la dirección de la animación de deslizamiento (izquierda / derecha).
+     */
+    fun getBottomBarOrder(route: String?): Int {
+        return when (route) {
+            GENERATOR -> 0
+            KEYSTORE_LIST -> 1
+            SETTINGS -> 2
+            else -> -1
+        }
+    }
 }
