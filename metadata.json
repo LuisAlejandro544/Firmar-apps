@@ -1,0 +1,6 @@
+{
+  "name": "Keystore Creator",
+  "description": "Generador y gestor de keystores para Android con almacenamiento local y exportación de certificados.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
