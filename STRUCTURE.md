@@ -22,7 +22,8 @@ UI (Compose) ──> ViewModel (StateFlow) ──> Repository ──┬──> R
 └── build-debug-apk.yml                  # Pipeline CI/CD para compilar APKs Debug sin caché y por arquitectura
 
 scripts/
-└── generate-debug-keystore.sh           # Script Bash para forzar la creación de firma debug desde cero
+├── generate-debug-keystore.sh           # Script Bash para forzar la creación de firma debug desde cero
+└── isolate-and-sign-abi-apk.py          # Script Python para purgar librerías nativas cruzadas, zipalign y apksigner v2/v3
 
 app/src/main/
 ├── AndroidManifest.xml                  # Declaración de actividades y FileProvider
@@ -123,9 +124,16 @@ app/src/main/
   - Script Bash ejecutable con directivas de seguridad (`set -euo pipefail`).
   - Purga firmas `debug.keystore` previas tanto en la raíz como en `app/` para forzar la creación de un par de claves limpio y único en cada compilación.
   - Invoca `keytool` del JDK con RSA de 2048 bits, validez de 10.000 días y genera las huellas forenses SHA-256, SHA-1 y MD5 en la consola de compilación.
+* **`scripts/isolate-and-sign-abi-apk.py`**:
+  - Script en Python 3 para purga e inmunización estricta de arquitecturas nativas.
+  - Examina el APK y descarta de forma quirúrgica cualquier archivo `.so` en `lib/` que pertenezca a otra arquitectura (ej. elimina `armeabi-v7a`, `x86`, `x86_64` de los binarios `arm64-v8a`).
+  - Purga firmas residuales previas en `META-INF/` para prevenir firmas inválidas o corruptas.
+  - Ejecuta `zipalign -f -p 4` para alinear datos y bibliotecas compartidas a límites de 4 bytes / páginas.
+  - Re-firma el APK con `apksigner` aplicando los esquemas modernos v2 y v3 con `debug.keystore`.
+  - Audita el paquete final con verificación "fail-fast": si se detecta una sola librería nativa ajena, detiene la ejecución inmediatamente con error.
 * **`.github/workflows/build-debug-apk.yml`**:
   - Pipeline de GitHub Actions ejecutado en contenedores limpios `ubuntu-latest`.
   - Configura Java 17 y Gradle con la caché desactivada (`cache-disabled: true`, `--no-daemon`, `--no-build-cache`).
   - Ejecuta `generate-debug-keystore.sh` para auto-firmar la compilación sin depender de variables de entorno ni secrets.
-  - Aprovecha los splits nativos de Gradle (`splits.abi`) para empaquetar de forma estricta y aislada cada arquitectura (`arm64-v8a`, `armeabi-v7a`, `x86_64` y `universal`), asegurando que en `lib/` no se mezclen binarios de otras arquitecturas.
+  - Ejecuta `isolate-and-sign-abi-apk.py` en el paso de empaquetado para aislar cada arquitectura (`arm64-v8a`, `armeabi-v7a`, `x86_64` y `universal`), erradicando que en `lib/` se mezclen binarios de otras arquitecturas.
   - Sube cada paquete como un artefacto individual mediante `actions/upload-artifact@v4`, permitiendo descargarlos directamente desde el teléfono sin lidiar con archivos zip comprimidos monolíticos y con el menor tamaño posible.

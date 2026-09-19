@@ -78,42 +78,77 @@ jobs:
           fi
           echo "✅ APK Debug Universal encontrado. Tamaño: $(wc -c < "$APK_DIR/app-universal-debug.apk") bytes"
 
-      # Paso 7: Desglosar y organizar los APKs por arquitectura de destino
-      # Cada APK contiene de forma estricta y exclusiva las librerías nativas (.so) de su arquitectura,
-      # reduciendo drásticamente el peso y garantizando aislamiento total.
-      - name: "📦 Organizar APKs por arquitectura para entrega individual"
+      # Paso 7: Desglosar, purgar y aislar estrictamente los APKs por arquitectura
+      # Ejecuta el script isolate-and-sign-abi-apk.py para garantizar que cada binario individual
+      # contenga única y exclusivamente las librerías nativas (.so) de su propia arquitectura,
+      # eliminando quirúrgicamente cualquier librería ajena empaquetada por error, re-alineando
+      # a 4 bytes con zipalign y aplicando una firma fresca con apksigner y debug.keystore.
+      - name: "📦 Aislar librerías nativas y firmar APKs por arquitectura"
         run: |
-          mkdir -p dist/arm64-v8a
-          mkdir -p dist/armeabi-v7a
-          mkdir -p dist/x86_64
-          mkdir -p dist/universal
-
+          chmod +x ./scripts/isolate-and-sign-abi-apk.py
           APK_DIR="app/build/outputs/apk/debug"
 
-          # 1. Copia para Arquitectura ARM 64-bit (Exclusivamente binarios arm64-v8a)
-          cp "$APK_DIR/app-arm64-v8a-debug.apk" dist/arm64-v8a/KeystoreCreator-debug-arm64-v8a.apk
+          # 1. Procesar ARM 64-bit (arm64-v8a)
+          python3 ./scripts/isolate-and-sign-abi-apk.py \
+            --input "$APK_DIR/app-arm64-v8a-debug.apk" \
+            --abi "arm64-v8a" \
+            --output "dist/arm64-v8a/KeystoreCreator-debug-arm64-v8a.apk" \
+            --keystore "debug.keystore"
 
-          # 2. Copia para Arquitectura ARM 32-bit (Exclusivamente binarios armeabi-v7a)
-          cp "$APK_DIR/app-armeabi-v7a-debug.apk" dist/armeabi-v7a/KeystoreCreator-debug-armeabi-v7a.apk
+          # 2. Procesar ARM 32-bit (armeabi-v7a)
+          python3 ./scripts/isolate-and-sign-abi-apk.py \
+            --input "$APK_DIR/app-armeabi-v7a-debug.apk" \
+            --abi "armeabi-v7a" \
+            --output "dist/armeabi-v7a/KeystoreCreator-debug-armeabi-v7a.apk" \
+            --keystore "debug.keystore"
 
-          # 3. Copia para Arquitectura x86_64 (Exclusivamente binarios x86_64)
-          cp "$APK_DIR/app-x86_64-debug.apk" dist/x86_64/KeystoreCreator-debug-x86_64.apk
+          # 3. Procesar x86_64 (Emuladores y PCs)
+          python3 ./scripts/isolate-and-sign-abi-apk.py \
+            --input "$APK_DIR/app-x86_64-debug.apk" \
+            --abi "x86_64" \
+            --output "dist/x86_64/KeystoreCreator-debug-x86_64.apk" \
+            --keystore "debug.keystore"
 
-          # 4. Copia Universal (Compatible con todas las arquitecturas)
-          cp "$APK_DIR/app-universal-debug.apk" dist/universal/KeystoreCreator-debug-universal.apk
+          # 4. Procesar Universal (Todas las ABIs combinadas)
+          python3 ./scripts/isolate-and-sign-abi-apk.py \
+            --input "$APK_DIR/app-universal-debug.apk" \
+            --abi "universal" \
+            --output "dist/universal/KeystoreCreator-debug-universal.apk" \
+            --keystore "debug.keystore"
 
-          echo "📋 Verificación de librerías nativas incluidas en cada binario:"
-          echo "--- ARM 64-bit (debe tener solo lib/arm64-v8a): ---"
+          echo "======================================================================"
+          echo "🛡️  AUDITORÍA FINAL ESTRICTA DE SEGURIDAD Y AISLAMIENTO DE ARQUITECTURAS"
+          echo "======================================================================"
+
+          echo "--- Verificando ARM 64-bit (KeystoreCreator-debug-arm64-v8a.apk) ---"
           unzip -l dist/arm64-v8a/KeystoreCreator-debug-arm64-v8a.apk | grep "lib/" || true
-          echo "--- ARM 32-bit (debe tener solo lib/armeabi-v7a): ---"
+          if unzip -l dist/arm64-v8a/KeystoreCreator-debug-arm64-v8a.apk | grep "lib/" | grep -v "lib/arm64-v8a/"; then
+            echo "❌ FALLO CRÍTICO: Se encontraron librerías ajenas dentro del APK arm64-v8a!"
+            exit 1
+          fi
+
+          echo "--- Verificando ARM 32-bit (KeystoreCreator-debug-armeabi-v7a.apk) ---"
           unzip -l dist/armeabi-v7a/KeystoreCreator-debug-armeabi-v7a.apk | grep "lib/" || true
-          echo "--- x86_64 (debe tener solo lib/x86_64): ---"
+          if unzip -l dist/armeabi-v7a/KeystoreCreator-debug-armeabi-v7a.apk | grep "lib/" | grep -v "lib/armeabi-v7a/"; then
+            echo "❌ FALLO CRÍTICO: Se encontraron librerías ajenas dentro del APK armeabi-v7a!"
+            exit 1
+          fi
+
+          echo "--- Verificando x86_64 (KeystoreCreator-debug-x86_64.apk) ---"
           unzip -l dist/x86_64/KeystoreCreator-debug-x86_64.apk | grep "lib/" || true
-          echo "--- Universal (debe tener todas las ABIs): ---"
+          if unzip -l dist/x86_64/KeystoreCreator-debug-x86_64.apk | grep "lib/" | grep -v "lib/x86_64/"; then
+            echo "❌ FALLO CRÍTICO: Se encontraron librerías ajenas dentro del APK x86_64!"
+            exit 1
+          fi
+
+          echo "--- Verificando Universal (KeystoreCreator-debug-universal.apk) ---"
           unzip -l dist/universal/KeystoreCreator-debug-universal.apk | grep "lib/" || true
 
-          echo "Listado final de paquetes generados por arquitectura:"
+          echo "======================================================================"
+          echo "✅ TODOS LOS APKS HAN SIDO VERIFICADOS Y AISLADOS EXITOSAMENTE."
+          echo "Listado de paquetes listos para distribución:"
           ls -lh dist/*/*.apk
+          echo "======================================================================"
 
       # Paso 8.1: Subir Artifact individual para ARM 64-bit (arm64-v8a)
       - name: "🚀 Subir Artifact individual - ARM 64-bit (arm64-v8a)"
