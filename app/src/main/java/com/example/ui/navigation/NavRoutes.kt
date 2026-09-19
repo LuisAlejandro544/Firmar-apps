@@ -2,8 +2,10 @@ package com.example.ui.navigation
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FolderShared
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.VpnKey
 import androidx.compose.material.icons.outlined.FolderShared
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.VpnKey
 import androidx.compose.ui.graphics.vector.ImageVector
 
@@ -29,12 +31,21 @@ sealed class NavDestination(
         selectedIcon = Icons.Filled.FolderShared,
         unselectedIcon = Icons.Outlined.FolderShared
     )
+
+    data object Settings : NavDestination(
+        route = "settings",
+        title = "Ajustes",
+        selectedIcon = Icons.Filled.Settings,
+        unselectedIcon = Icons.Outlined.Settings
+    )
 }
 
 object AppRoutes {
     const val GENERATOR = "generator"
     const val KEYSTORE_LIST = "keystores"
     const val KEYSTORE_DETAIL = "keystore_detail/{keystoreId}"
+    const val SETTINGS = "settings"
+    const val COLOR_THEME = "settings_color_theme"
 
     fun createDetailRoute(keystoreId: Long): String = "keystore_detail/$keystoreId"
 }

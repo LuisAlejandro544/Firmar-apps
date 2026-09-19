@@ -24,6 +24,7 @@ import java.util.Date
 
 /**
  * Parámetros requeridos para la generación de un nuevo Keystore y certificado autofirmado.
+ * Permite especificar la validez tanto en años como en días exactos (desde 1 día hasta 100 años).
  */
 data class KeystoreParams(
     val title: String,
@@ -33,6 +34,7 @@ data class KeystoreParams(
     val keyPassword: String,
     val keySize: Int = 2048,
     val validityYears: Int = 25,
+    val validityDays: Int = validityYears * 365,
     val commonName: String = "Android Developer",
     val organization: String = "Mobile Development",
     val organizationalUnit: String = "Development",
@@ -100,10 +102,11 @@ object KeystoreGenerator {
                 }
                 val issuerAndSubject = nameBuilder.build()
 
-                // 5. Definir rango de validez (inicio ayer para evitar desincronización de reloj, fin según años)
+                // 5. Definir rango de validez (inicio ayer para evitar desincronización de reloj, fin según días exactos)
                 val notBefore = Date(System.currentTimeMillis() - (24L * 60 * 60 * 1000))
                 val calendar = Calendar.getInstance()
-                calendar.add(Calendar.YEAR, params.validityYears)
+                val totalDays = if (params.validityDays > 0) params.validityDays else (params.validityYears * 365)
+                calendar.add(Calendar.DAY_OF_YEAR, totalDays)
                 val notAfter = calendar.time
 
                 // Número de serie aleatorio de 64 bits
@@ -171,7 +174,7 @@ object KeystoreGenerator {
                     storePassword = params.storePassword,
                     keyPassword = params.keyPassword,
                     keyAlgorithm = "RSA ${params.keySize} bits",
-                    validityYears = params.validityYears,
+                    validityYears = if (totalDays >= 365) totalDays / 365 else 1,
                     commonName = params.commonName.trim(),
                     organization = params.organization.trim(),
                     organizationalUnit = params.organizationalUnit.trim(),

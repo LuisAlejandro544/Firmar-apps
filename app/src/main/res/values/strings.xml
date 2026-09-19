@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">Keystore Creator</string>
+    <string name="debug_app_name">Crypto Lab (Debug)</string>
 </resources>

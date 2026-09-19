@@ -16,15 +16,18 @@ import kotlinx.coroutines.launch
 
 /**
  * Estado UI del formulario de generación de keystore.
+ * Soporta selección de formatos (.jks y .keystore), auto-detección de extensión
+ * y rango de validez granular desde 1 día hasta 100 años.
  */
 data class GeneratorUiState(
     val title: String = "Clave Release",
-    val fileName: String = "release_key.jks",
+    val fileBaseName: String = "release_key",
+    val selectedExtension: String = ".jks", // ".jks" o ".keystore"
     val alias: String = "key0",
     val storePassword: String = "",
     val keyPassword: String = "",
     val useSamePassword: Boolean = true,
-    val validityYears: Int = 25,
+    val validityDays: Int = 25 * 365, // 9,125 días (25 años por defecto en Android)
     val keySize: Int = 2048,
     val commonName: String = "Desarrollador Android",
     val organization: String = "Mobile Apps",
@@ -36,7 +39,28 @@ data class GeneratorUiState(
     val isGenerating: Boolean = false,
     val createdKeystore: KeystoreEntity? = null,
     val errorMessage: String? = null
-)
+) {
+    /**
+     * Nombre final del archivo combinado de forma limpia con la extensión seleccionada.
+     * Si el usuario escribió la extensión en el nombre base, se previene duplicación.
+     */
+    val fullFileName: String
+        get() {
+            val cleanBase = fileBaseName.trim()
+                .removeSuffix(".jks")
+                .removeSuffix(".keystore")
+                .ifEmpty { "release_key" }
+            return "$cleanBase$selectedExtension"
+        }
+
+    /** Propiedad de compatibilidad que retorna el nombre completo del archivo */
+    val fileName: String
+        get() = fullFileName
+
+    /** Validez en años redondeada hacia abajo (o 1 si es menor a un año) */
+    val validityYears: Int
+        get() = if (validityDays >= 365) validityDays / 365 else 1
+}
 
 /**
  * ViewModel que gestiona la lógica del formulario de creación y coordina
@@ -55,7 +79,41 @@ class GeneratorViewModel(application: Application) : AndroidViewModel(applicatio
     val uiState: StateFlow<GeneratorUiState> = _uiState.asStateFlow()
 
     fun onTitleChange(value: String) = _uiState.update { it.copy(title = value) }
-    fun onFileNameChange(value: String) = _uiState.update { it.copy(fileName = value) }
+
+    /**
+     * Actualiza el nombre base del archivo y detecta de forma inteligente si el usuario
+     * escribió explícitamente '.jks' o '.keystore' para seleccionar el formato y limpiar el nombre.
+     */
+    fun onFileBaseNameChange(value: String) = _uiState.update { current ->
+        val trimmed = value.trim()
+        val detectedExtension = when {
+            trimmed.endsWith(".keystore", ignoreCase = true) -> ".keystore"
+            trimmed.endsWith(".jks", ignoreCase = true) -> ".jks"
+            else -> null
+        }
+        val cleanName = if (detectedExtension != null) {
+            trimmed.substring(0, trimmed.length - detectedExtension.length)
+        } else {
+            value
+        }
+        current.copy(
+            fileBaseName = cleanName,
+            selectedExtension = detectedExtension ?: current.selectedExtension
+        )
+    }
+
+    /** Compatibilidad para cuando se invoca onFileNameChange */
+    fun onFileNameChange(value: String) = onFileBaseNameChange(value)
+
+    /** Cambia el formato de archivo entre .jks y .keystore */
+    fun onFileExtensionChange(extension: String) = _uiState.update {
+        if (extension == ".jks" || extension == ".keystore") {
+            it.copy(selectedExtension = extension)
+        } else {
+            it
+        }
+    }
+
     fun onAliasChange(value: String) = _uiState.update { it.copy(alias = value) }
 
     fun onStorePasswordChange(value: String) = _uiState.update {
@@ -75,7 +133,14 @@ class GeneratorViewModel(application: Application) : AndroidViewModel(applicatio
         )
     }
 
-    fun onValidityYearsChange(years: Int) = _uiState.update { it.copy(validityYears = years) }
+    /** Actualiza los días de validez con rango restringido de 1 día a 36500 días (100 años) */
+    fun onValidityDaysChange(days: Int) = _uiState.update {
+        it.copy(validityDays = days.coerceIn(1, 36500))
+    }
+
+    /** Actualiza los días de validez a partir de años */
+    fun onValidityYearsChange(years: Int) = onValidityDaysChange(years * 365)
+
     fun onKeySizeChange(size: Int) = _uiState.update { it.copy(keySize = size) }
     fun onCommonNameChange(value: String) = _uiState.update { it.copy(commonName = value) }
     fun onOrganizationChange(value: String) = _uiState.update { it.copy(organization = value) }
@@ -100,7 +165,7 @@ class GeneratorViewModel(application: Application) : AndroidViewModel(applicatio
             _uiState.update { it.copy(errorMessage = "Por favor ingresa un título descriptivo") }
             return
         }
-        if (state.fileName.isBlank()) {
+        if (state.fileBaseName.isBlank()) {
             _uiState.update { it.copy(errorMessage = "Por favor ingresa un nombre para el archivo") }
             return
         }
@@ -123,12 +188,13 @@ class GeneratorViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch {
             val params = KeystoreParams(
                 title = state.title,
-                fileName = state.fileName,
+                fileName = state.fullFileName,
                 alias = state.alias,
                 storePassword = state.storePassword,
                 keyPassword = finalKeyPassword,
                 keySize = state.keySize,
                 validityYears = state.validityYears,
+                validityDays = state.validityDays,
                 commonName = state.commonName,
                 organization = state.organization,
                 organizationalUnit = state.organizationalUnit,
@@ -167,12 +233,13 @@ class GeneratorViewModel(application: Application) : AndroidViewModel(applicatio
         _uiState.update {
             it.copy(
                 title = "App Release $timestamp",
-                fileName = "release_$timestamp.jks",
+                fileBaseName = "release_$timestamp",
+                selectedExtension = if (timestamp % 2L == 0L) ".jks" else ".keystore",
                 alias = "key$timestamp",
                 storePassword = "password$timestamp",
                 keyPassword = "password$timestamp",
                 useSamePassword = true,
-                validityYears = 25,
+                validityDays = 25 * 365,
                 keySize = 2048,
                 commonName = "Android Dev $timestamp",
                 countryCode = "ES"

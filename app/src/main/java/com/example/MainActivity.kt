@@ -28,6 +28,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
@@ -44,19 +45,29 @@ import com.example.ui.list.KeystoreListScreen
 import com.example.ui.list.KeystoreListViewModel
 import com.example.ui.navigation.AppRoutes
 import com.example.ui.navigation.NavDestination
+import com.example.ui.settings.ColorPickerScreen
+import com.example.ui.settings.SettingsScreen
+import com.example.ui.settings.ThemeViewModel
 import com.example.ui.theme.MyApplicationTheme
 
 /**
  * Actividad principal de la aplicación.
- * Configura la experiencia Edge-to-Edge, el tema global y el contenedor de navegación.
+ * Configura la experiencia Edge-to-Edge, el tema reactivo global y el contenedor de navegación.
  */
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            MyApplicationTheme {
-                KeystoreApp()
+            val themeViewModel: ThemeViewModel = viewModel()
+            val themeSettings by themeViewModel.themeSettings.collectAsStateWithLifecycle()
+
+            MyApplicationTheme(
+                themeMode = themeSettings.themeMode,
+                dynamicColor = themeSettings.useDynamicColor,
+                customPrimaryColor = themeSettings.customPrimaryColor
+            ) {
+                KeystoreApp(themeViewModel = themeViewModel)
             }
         }
     }
@@ -64,27 +75,28 @@ class MainActivity : ComponentActivity() {
 
 /**
  * Contenedor principal con sistema de navegación cómodo mediante NavigationBar inferior
- * y soporte para pantallas de Generación, Listado y Detalle individual.
+ * y soporte para pantallas de Generación, Listado, Detalle y Configuración.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun KeystoreApp() {
+fun KeystoreApp(themeViewModel: ThemeViewModel) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
-    // Ocultar la barra inferior en la pantalla de detalle para maximizar el área de lectura
-    val isDetailScreen = currentRoute?.startsWith("keystore_detail") == true
+    // Ocultar la barra inferior y top app bar general en pantallas secundarias/hijas
+    val isChildScreen = currentRoute?.startsWith("keystore_detail") == true || currentRoute == AppRoutes.COLOR_THEME
 
     val destinations = listOf(
         NavDestination.Generator,
-        NavDestination.KeystoreList
+        NavDestination.KeystoreList,
+        NavDestination.Settings
     )
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         topBar = {
-            if (!isDetailScreen) {
+            if (!isChildScreen) {
                 CenterAlignedTopAppBar(
                     title = {
                         Text(
@@ -109,7 +121,7 @@ fun KeystoreApp() {
         },
         bottomBar = {
             AnimatedVisibility(
-                visible = !isDetailScreen,
+                visible = !isChildScreen,
                 enter = slideInVertically(initialOffsetY = { it }),
                 exit = slideOutVertically(targetOffsetY = { it })
             ) {
@@ -204,6 +216,24 @@ fun KeystoreApp() {
                     KeystoreDetailScreen(
                         keystoreId = keystoreId,
                         viewModel = detailViewModel,
+                        onBack = { navController.popBackStack() }
+                    )
+                }
+
+                // Pantalla 4: Menú de Configuración y Ajustes
+                composable(AppRoutes.SETTINGS) {
+                    SettingsScreen(
+                        themeViewModel = themeViewModel,
+                        onNavigateToColorTheme = {
+                            navController.navigate(AppRoutes.COLOR_THEME)
+                        }
+                    )
+                }
+
+                // Pantalla 5: Personalización de Color y Apariencia
+                composable(AppRoutes.COLOR_THEME) {
+                    ColorPickerScreen(
+                        themeViewModel = themeViewModel,
                         onBack = { navController.popBackStack() }
                     )
                 }

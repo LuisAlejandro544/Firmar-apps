@@ -6,6 +6,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -48,11 +49,13 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -65,6 +68,9 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.crypto.KeystoreExportHelper
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Locale
 
 /**
  * Pantalla principal del generador de keystores.
@@ -191,13 +197,61 @@ fun GeneratorScreen(
                         singleLine = true
                     )
 
+                    // Selector de formato de archivo (.jks o .keystore)
+                    Text(
+                        text = "Formato de archivo:",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        FilterChip(
+                            selected = state.selectedExtension == ".jks",
+                            onClick = { viewModel.onFileExtensionChange(".jks") },
+                            label = { Text(".jks (Estándar Android)") },
+                            modifier = Modifier.testTag("chip_format_jks")
+                        )
+                        FilterChip(
+                            selected = state.selectedExtension == ".keystore",
+                            onClick = { viewModel.onFileExtensionChange(".keystore") },
+                            label = { Text(".keystore (Clásico / Flutter)") },
+                            modifier = Modifier.testTag("chip_format_keystore")
+                        )
+                    }
+
+                    // Campo de nombre de archivo con auto-completado de extensión
                     OutlinedTextField(
-                        value = state.fileName,
-                        onValueChange = { viewModel.onFileNameChange(it) },
-                        label = { Text("Nombre del archivo (.jks)") },
-                        placeholder = { Text("ej. release_key.jks") },
+                        value = state.fileBaseName,
+                        onValueChange = { viewModel.onFileBaseNameChange(it) },
+                        label = { Text("Nombre del archivo") },
+                        placeholder = { Text("ej. release_key") },
                         leadingIcon = {
                             Icon(Icons.Default.Description, contentDescription = null)
+                        },
+                        trailingIcon = {
+                            Box(
+                                modifier = Modifier
+                                    .padding(end = 10.dp)
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(MaterialTheme.colorScheme.primaryContainer)
+                                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                            ) {
+                                Text(
+                                    text = state.selectedExtension,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                            }
+                        },
+                        supportingText = {
+                            Text(
+                                text = "Archivo final: ${state.fullFileName} (la extensión se coloca automáticamente)",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         },
                         modifier = Modifier
                             .fillMaxWidth()
@@ -374,23 +428,122 @@ fun GeneratorScreen(
                         )
                     }
 
-                    // Validez en años
-                    Text(
-                        text = "Validez del Certificado:",
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Medium
-                    )
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    // Validez con Slider interactivo (1 día a 100 años) y Accesos Rápidos
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f))
+                            .padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        listOf(25, 30, 50).forEach { years ->
-                            FilterChip(
-                                selected = state.validityYears == years,
-                                onClick = { viewModel.onValidityYearsChange(years) },
-                                label = { Text("$years años") },
-                                modifier = Modifier.testTag("chip_years_$years")
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Validez del Certificado:",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold
                             )
+
+                            // Etiqueta formateada y amigable
+                            val validityLabel = remember(state.validityDays) {
+                                when {
+                                    state.validityDays == 1 -> "1 día"
+                                    state.validityDays < 30 -> "${state.validityDays} días"
+                                    state.validityDays in 30..364 -> {
+                                        val months = state.validityDays / 30
+                                        "${state.validityDays} días (~$months ${if (months == 1) "mes" else "meses"})"
+                                    }
+                                    state.validityDays % 365 == 0 -> {
+                                        val years = state.validityDays / 365
+                                        "$years ${if (years == 1) "año" else "años"}"
+                                    }
+                                    else -> {
+                                        val years = state.validityDays / 365
+                                        val remDays = state.validityDays % 365
+                                        "$years a y $remDays d (${state.validityDays} d)"
+                                    }
+                                }
+                            }
+
+                            Text(
+                                text = validityLabel,
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+
+                        // Fecha de caducidad estimada en vivo
+                        val expiryDateText = remember(state.validityDays) {
+                            val cal = Calendar.getInstance()
+                            cal.add(Calendar.DAY_OF_YEAR, state.validityDays)
+                            val formatter = SimpleDateFormat("dd 'de' MMMM 'de' yyyy", Locale("es", "ES"))
+                            "Caduca aprox.: ${formatter.format(cal.time)}"
+                        }
+                        Text(
+                            text = expiryDateText,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+
+                        // Slider continuo desde 1 día hasta 36,500 días (100 años)
+                        Slider(
+                            value = state.validityDays.toFloat(),
+                            onValueChange = { viewModel.onValidityDaysChange(it.toInt()) },
+                            valueRange = 1f..36500f,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("validity_slider")
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = "1 día (Mín)",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = "100 años (Máx)",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+
+                        // Fila de accesos rápidos horizontales
+                        Text(
+                            text = "Accesos rápidos:",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            listOf(
+                                Pair("1 día", 1),
+                                Pair("30 días", 30),
+                                Pair("1 año", 365),
+                                Pair("25 años", 25 * 365),
+                                Pair("30 años", 30 * 365),
+                                Pair("100 años", 100 * 365)
+                            ).forEach { (label, days) ->
+                                FilterChip(
+                                    selected = state.validityDays == days,
+                                    onClick = { viewModel.onValidityDaysChange(days) },
+                                    label = { Text(label, style = MaterialTheme.typography.labelSmall) },
+                                    modifier = Modifier.testTag("chip_days_$days")
+                                )
+                            }
                         }
                     }
 

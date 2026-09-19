@@ -27,11 +27,15 @@ Keystore Creator es una aplicación nativa para Android cuyo objetivo es permiti
 
 ## 🔐 Peculiaridades Criptográficas en Android (CRÍTICO)
 
-### 1. Formato PKCS12 vs JKS Clásico
-- En versiones modernas de Android y Java (JDK 9+), el formato predeterminado y recomendado por Google para `apksigner` es **PKCS12** (con extensión `.jks` o `.keystore`).
+### 1. Formato PKCS12 vs JKS Clásico y Soporte Dual (.jks y .keystore)
+- En versiones modernas de Android y Java (JDK 9+), el formato predeterminado y recomendado por Google para `apksigner` es **PKCS12** (tanto con extensión `.jks` como `.keystore`).
+- La aplicación soporta explícitamente ambas extensiones (`.jks` y `.keystore`). Al escribir en el campo de nombre, el sistema detecta si el usuario escribió la extensión y la separa automáticamente, evitando nombres duplicados como `mi_llave.jks.jks` o `mi_llave.keystore.keystore`.
 - Bouncy Castle y el runtime de Android manejan PKCS12 con soporte completo para almacenar la clave privada RSA y la cadena de certificados X.509 v3.
 
-### 2. Conflicto de Proveedores de Seguridad (`BC` vs Conscrypt)
+### 2. Rango de Validez Granular (1 día a 100 años)
+- La validez del certificado X.509 se calcula en días exactos con `Calendar.add(Calendar.DAY_OF_YEAR, totalDays)`, permitiendo un rango continuo desde 1 día (para pruebas rápidas de depuración) hasta 100 años (36,500 días para firmas de largo plazo).
+
+### 3. Conflicto de Proveedores de Seguridad (`BC` vs Conscrypt)
 - **Lección aprendida / Bug resuelto:** Android incluye internamente una implementación antigua y mutilada de Bouncy Castle bajo el nombre de proveedor `"BC"`.
 - **Regla obligatoria:** Nunca forzar `.setProvider(BouncyCastleProvider.PROVIDER_NAME)` ni `.setProvider("BC")` para constructores de firma (`JcaContentSignerBuilder`) o conversores de certificados (`JcaX509CertificateConverter`). Debe permitirse al sistema utilizar su proveedor nativo (`Conscrypt`/`OpenSSL`) o pasar la instancia directa en memoria (`BouncyCastleProvider()`) como respaldo.
 
@@ -39,6 +43,14 @@ Keystore Creator es una aplicación nativa para Android cuyo objetivo es permiti
 - Las keystores generadas se guardan en el almacenamiento interno privado de la aplicación: `context.filesDir/keystores/`.
 - No solicitar permisos peligrosos como `READ_EXTERNAL_STORAGE` o `WRITE_EXTERNAL_STORAGE`.
 - La exportación hacia otras aplicaciones (gestores de archivos, mensajería, nube) se realiza mediante **`androidx.core.content.FileProvider`** con el URI de contenido `content://com.example.fileprovider/...`.
+
+### 4. Seguridad del Portapapeles, Auto-limpieza en 2 Minutos y Notificaciones In-App
+- **Protección en Android 13+ (API 33+):** Al copiar información sensible (contraseñas de keystore/clave o cadenas Base64 con la clave privada), se agrega el extra `ClipDescription.EXTRA_IS_SENSITIVE = true` en el `ClipData`. Esto le indica al sistema Android que oculte la vista previa flotante nativa y evite exponer la contraseña en texto plano en la pantalla.
+- **Auto-limpieza a los 2 minutos (Estricta):** Al copiar datos desde la aplicación, se programa una tarea con `Handler(Looper.getMainLooper())` a los 120 segundos. Al ejecutarse, verifica minuciosamente que el portapapeles siga conteniendo la metadata de la app (`com.example.IS_KEYSTORE_APP_CLIP`) y el texto exacto copiado; si y solo si ambas condiciones se cumplen, se invoca `clipboard.clearPrimaryClip()` (o texto vacío en APIs < 28). Si el usuario copió datos de otra app entretanto, no se borra.
+- **Avisos in-app personalizados:** Se evitan los `Toast.makeText` nativos (que son toscos y no personalizables). En su lugar, la app utiliza un componente visual in-app (`SecurityNotificationBanner`) que advierte al usuario explícitamente: *"Otras aplicaciones instaladas en tu dispositivo podrían acceder al portapapeles. Ten precaución dónde lo pegas."*
+
+### 5. Conversión a Base64 para CI/CD
+- La codificación a Base64 se realiza mediante `android.util.Base64.encodeToString(bytes, Base64.NO_WRAP)` para evitar saltos de línea indeseados que rompan secretos en GitHub Actions (`ANDROID_KEYSTORE_BASE64`) o GitLab CI.
 
 ---
 

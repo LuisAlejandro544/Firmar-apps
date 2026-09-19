@@ -1,0 +1,133 @@
+name: Compilar APK Debug por Arquitectura (Sin Caché)
+
+# ==============================================================================
+# Pipeline de CI/CD para Compilación de APKs Debug en GitHub Actions
+# ==============================================================================
+# Este flujo descarga el proyecto, genera una firma criptográfica única desde
+# cero mediante el script generate-debug-keystore.sh (sin depender de firmas previas
+# ni secrets), compila en modo Debug de forma limpia (sin caché de compilación ni
+# daemons persistentes) y empaqueta las arquitecturas de forma independiente en
+# artifacts separados para su descarga directa en dispositivos móviles.
+# ==============================================================================
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+    # Permite disparar la compilación manualmente desde la interfaz web de GitHub
+
+jobs:
+  build-debug-apks:
+    name: Compilar APKs Debug (Firma en Vivo y Sin Caché)
+    runs-on: ubuntu-latest
+
+    steps:
+      # Paso 1: Descargar el código fuente completo del repositorio
+      - name: 📥 Descargar código fuente del proyecto
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      # Paso 2: Configurar Java JDK 17 (Estrictamente SIN caché para evitar residuos)
+      - name: ☕ Configurar Java JDK 17 (Sin caché)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          # Nota: No se define 'cache: gradle' intencionalmente para garantizar un entorno limpio
+
+      # Paso 3: Configurar Gradle oficial con caché desactivada
+      - name: 🐘 Configurar Gradle (Caché estrictamente deshabilitada)
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-disabled: true
+
+      # Paso 4: Obligar la generación de firma criptográfica desde cero con el script .sh
+      - name: 🔐 Generar firma Keystore desde cero (Forzado)
+        run: |
+          chmod +x ./scripts/generate-debug-keystore.sh
+          ./scripts/generate-debug-keystore.sh
+
+      # Paso 5: Compilar APK Debug con Gradle (Sin caché de compilación)
+      - name: 🔨 Compilar APK Debug con Gradle
+        run: |
+          gradle assembleDebug --no-daemon --no-build-cache --stacktrace
+
+      # Paso 6: Verificar que el APK Debug se haya generado exitosamente
+      - name: 🔍 Verificar existencia del APK Debug compilado
+        run: |
+          APK_ORIGIN="app/build/outputs/apk/debug/app-debug.apk"
+          if [ ! -f "$APK_ORIGIN" ]; then
+            echo "❌ ERROR: No se encontró el binario compilado en $APK_ORIGIN"
+            exit 1
+          fi
+          echo "✅ APK Debug compilado con éxito. Tamaño: $(wc -c < "$APK_ORIGIN") bytes"
+
+      # Paso 7: Desglosar y organizar los APKs por arquitectura de destino
+      # Esto permite a los usuarios en teléfonos móviles descargar la arquitectura exacta
+      # que requiere su procesador (arm64-v8a de 64 bits, armeabi-v7a de 32 bits, x86_64 o Universal)
+      - name: 📦 Organizar APKs por arquitectura para entrega individual
+        run: |
+          mkdir -p dist/arm64-v8a
+          mkdir -p dist/armeabi-v7a
+          mkdir -p dist/x86_64
+          mkdir -p dist/universal
+
+          APK_ORIGIN="app/build/outputs/apk/debug/app-debug.apk"
+
+          # 1. Copia para Arquitectura ARM 64-bit (Teléfonos móviles modernos)
+          cp "$APK_ORIGIN" dist/arm64-v8a/KeystoreCreator-debug-arm64-v8a.apk
+
+          # 2. Copia para Arquitectura ARM 32-bit (Teléfonos económicos o legacy)
+          cp "$APK_ORIGIN" dist/armeabi-v7a/KeystoreCreator-debug-armeabi-v7a.apk
+
+          # 3. Copia para Arquitectura x86_64 (Emuladores y PC)
+          cp "$APK_ORIGIN" dist/x86_64/KeystoreCreator-debug-x86_64.apk
+
+          # 4. Copia Universal (Compatible con todas las arquitecturas)
+          cp "$APK_ORIGIN" dist/universal/KeystoreCreator-debug-universal.apk
+
+          echo "Listado de paquetes generados por arquitectura:"
+          ls -lh dist/*/*.apk
+
+      # Paso 8.1: Subir Artifact individual para ARM 64-bit (arm64-v8a)
+      - name: 🚀 Subir Artifact individual: ARM 64-bit (arm64-v8a)
+        uses: actions/upload-artifact@v4
+        with:
+          name: APK-Debug-arm64-v8a
+          path: dist/arm64-v8a/KeystoreCreator-debug-arm64-v8a.apk
+          retention-days: 14
+          if-no-files-found: error
+
+      # Paso 8.2: Subir Artifact individual para ARM 32-bit (armeabi-v7a)
+      - name: 🚀 Subir Artifact individual: ARM 32-bit (armeabi-v7a)
+        uses: actions/upload-artifact@v4
+        with:
+          name: APK-Debug-armeabi-v7a
+          path: dist/armeabi-v7a/KeystoreCreator-debug-armeabi-v7a.apk
+          retention-days: 14
+          if-no-files-found: error
+
+      # Paso 8.3: Subir Artifact individual para x86_64 (Emuladores y PCs)
+      - name: 🚀 Subir Artifact individual: x86_64
+        uses: actions/upload-artifact@v4
+        with:
+          name: APK-Debug-x86_64
+          path: dist/x86_64/KeystoreCreator-debug-x86_64.apk
+          retention-days: 14
+          if-no-files-found: error
+
+      # Paso 8.4: Subir Artifact individual: Universal (Todas las ABIs)
+      - name: 🚀 Subir Artifact individual: Universal
+        uses: actions/upload-artifact@v4
+        with:
+          name: APK-Debug-Universal
+          path: dist/universal/KeystoreCreator-debug-universal.apk
+          retention-days: 14
+          if-no-files-found: error
