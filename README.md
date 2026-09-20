@@ -7,14 +7,18 @@ Una aplicación móvil moderna desarrollada en **Kotlin** y **Jetpack Compose** 
 ## 📱 Características Principales
 
 - **Generador de Keystores Criptográfico:**
-  - Creación de pares de claves RSA (2048 y 4096 bits) con certificados **X.509 v3** autofirmados de validez industrial completa (RFC 5280).
+  - Creación de pares de claves asimétricas:
+    - **RSA Clásico:** 2048 y 4096 bits para compatibilidad total con cualquier entorno legado.
+    - **Curvas Elípticas Modernas (ECDSA):** `secp256r1 (NIST P-256)`, `secp384r1 (NIST P-384)` y `secp521r1 (NIST P-521)`. Ofrecen firmas ultrarrápidas, menor consumo de CPU y memoria en el teléfono y un nivel de seguridad matemática significativamente superior por bit frente a RSA.
+  - Firma digital adaptativa: `SHA256withRSA`, `SHA256withECDSA`, `SHA384withECDSA` y `SHA512withECDSA` con proveedores criptográficos nativos.
+  - Certificados **X.509 v3** autofirmados de validez industrial completa (RFC 5280).
   - **Extensiones X.509 v3 Estándar Incorporadas:**
     - `BasicConstraints(false)` (marcada como crítica): Declara que el certificado es de entidad final y no una CA, satisfaciendo a analizadores estáticos y escáneres de seguridad corporativos (MobSF, SonarQube).
     - `KeyUsage(digitalSignature)` (marcada como crítica): Autoriza explícitamente el uso del par de claves para firma digital de binarios Android.
     - `SubjectKeyIdentifier (SKI)` y `AuthorityKeyIdentifier (AKI)`: Hashes de 160 bits (SHA-1) calculados mediante `JcaX509ExtensionUtils` para optimizar la indexación y verificación de firmas en `apksigner` y esquemas de firma APK v2 y v3.
-  - **Soporte Dual de Formatos (`.jks` y `.keystore`):** Selector de extensión estándar Android o clásico/Flutter, con autocompletado y detección inteligente de nombres para que el usuario escriba lo que desee sin preocuparse por escribir la extensión a mano.
+  - **Soporte de Formato Universal (`.jks`, `.keystore` y `.p12` / PKCS#12):** Selector táctil de extensión para generar directamente almacenes en `.p12` (estándar abierto universal para fastlane, CI/CD, servidores web y macOS), `.jks` (estándar Java) o `.keystore` clásico, con autocompletado y detección inteligente de nombres.
+  - **Conversor Bidireccional de Formatos (JKS ⟷ PKCS12 / .p12):** Herramienta integrada en la pantalla de detalle para transformar cualquier almacén existente entre JKS, PKCS12 (.p12) y .keystore sin alterar la clave privada ni las huellas digitales (SHA-1/SHA-256) del certificado, con soporte para personalizar contraseñas de destino y nombres de archivo.
   - **Validez Granular de 1 Día a 100 Años con Slider Interactivo:** Control deslizante continuo que permite fijar la validez desde 1 día (ideal para pruebas temporales o debug) hasta 100 años (llaves de producción de largo plazo), con cálculo de fecha de caducidad en tiempo real y accesos rápidos (1 día, 30 días, 1 año, 25 años, 30 años, 100 años).
-  - Firma digital con algoritmo `SHA256withRSA` utilizando el proveedor de seguridad nativo de Android.
   - **Generador y Auditor de Contraseñas Ultra Seguras con Motor zxcvbn:**
     - Botón táctil ergonómico con varita mágica al lado de los campos de contraseña en el formulario móvil.
     - Diálogo interactivo con 3 opciones de longitud criptográfica: **16 caracteres** (Alta), **24 caracteres** (Muy Alta) y **32 caracteres** (Ultra Segura).
@@ -83,7 +87,17 @@ Una aplicación móvil moderna desarrollada en **Kotlin** y **Jetpack Compose** 
   - Exportación y compartición directa del archivo (`.jks` o `.keystore`) mediante `FileProvider` a herramientas móviles como MT Manager, Google Drive, WhatsApp, Telegram o el gestor de archivos del teléfono.
 
 - **Menú de Configuración y Personalización Visual 100% Flexible:**
-  - **Pantalla Dedicada de Ajustes:** Menú estructurado con tarjetas informativas sobre apariencia, seguridad offline y arquitectura del procesador.
+  - **Pantalla Dedicada de Ajustes:** Menú estructurado con tarjetas informativas sobre apariencia, guía y aprendizaje criptográfico, seguridad offline y arquitectura del procesador.
+  - **Guía de Firma y Criptografía Móvil (FAQ y Estándares de la Industria):**
+    - Pantalla interactiva optimizada para pantalla táctil con buscador rápido y filtro por categorías temáticas (Formatos, Algoritmos, Validez, Seguridad).
+    - Tarjetas con acordeón interactivo y animación suave que resuelven dudas frecuentes:
+      - ¿Cuál formato es el más recomendable para la industria móvil? (Explicación de PKCS#12, desuso de JKS en Java 9+ y convenciones .jks vs .p12).
+      - ¿Qué algoritmo elegir: RSA o Curvas Elípticas (ECDSA)? (Comparativa de compatibilidad universal vs eficiencia en batería y rendimiento).
+      - ¿Qué diferencias existen entre .jks, .keystore y .p12?
+      - ¿Puedo convertir mi archivo sin romper las actualizaciones de mi app en tiendas? (Garantía de compatibilidad total conservando certificados X.509 y huellas SHA-256).
+      - ¿Cuántos años de validez asignar y qué ocurre si se pierde la firma?
+      - Utilidad de las huellas SHA-256 y SHA-1 en Firebase y APIs de Google.
+      - Esquemas de firma de Android (v1, v2 y v3).
   - **Modo de Apariencia Triple:** Opción para alternar entre "Seguir el sistema" (automático), "Modo claro" y "Modo oscuro".
   - **Soporte Nativo para Material You:** Integración completa con colores dinámicos del sistema en dispositivos con Android 12+ (API 31+). Si el móvil cuenta con una versión anterior, la interfaz lo detecta y explica amigablemente la compatibilidad.
   - **Paleta de Colores 100% Personalizable:**

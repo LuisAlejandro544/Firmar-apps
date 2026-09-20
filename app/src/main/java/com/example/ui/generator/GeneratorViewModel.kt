@@ -26,12 +26,14 @@ import kotlinx.coroutines.launch
 data class GeneratorUiState(
     val title: String = "Clave Release",
     val fileBaseName: String = "release_key",
-    val selectedExtension: String = ".jks", // ".jks" o ".keystore"
+    val selectedExtension: String = ".jks", // ".jks", ".keystore" o ".p12"
     val alias: String = "key0",
     val storePassword: String = "",
     val keyPassword: String = "",
     val useSamePassword: Boolean = true,
     val validityDays: Int = 25 * 365, // 9,125 días (25 años por defecto en Android)
+    val algorithmType: String = "RSA", // "RSA" o "ECDSA"
+    val ecCurveName: String = "secp256r1", // "secp256r1" (NIST P-256), "secp384r1", "secp521r1"
     val keySize: Int = 2048,
     val commonName: String = "Desarrollador Android",
     val organization: String = "Mobile Apps",
@@ -60,6 +62,7 @@ data class GeneratorUiState(
             val cleanBase = fileBaseName.trim()
                 .removeSuffix(".jks")
                 .removeSuffix(".keystore")
+                .removeSuffix(".p12")
                 .ifEmpty { "release_key" }
             return "$cleanBase$selectedExtension"
         }
@@ -93,11 +96,12 @@ class GeneratorViewModel(application: Application) : AndroidViewModel(applicatio
 
     /**
      * Actualiza el nombre base del archivo y detecta de forma inteligente si el usuario
-     * escribió explícitamente '.jks' o '.keystore' para seleccionar el formato y limpiar el nombre.
+     * escribió explícitamente '.jks', '.keystore' o '.p12' para seleccionar el formato y limpiar el nombre.
      */
     fun onFileBaseNameChange(value: String) = _uiState.update { current ->
         val trimmed = value.trim()
         val detectedExtension = when {
+            trimmed.endsWith(".p12", ignoreCase = true) -> ".p12"
             trimmed.endsWith(".keystore", ignoreCase = true) -> ".keystore"
             trimmed.endsWith(".jks", ignoreCase = true) -> ".jks"
             else -> null
@@ -116,13 +120,27 @@ class GeneratorViewModel(application: Application) : AndroidViewModel(applicatio
     /** Compatibilidad para cuando se invoca onFileNameChange */
     fun onFileNameChange(value: String) = onFileBaseNameChange(value)
 
-    /** Cambia el formato de archivo entre .jks y .keystore */
+    /** Cambia el formato de archivo entre .jks, .keystore y .p12 */
     fun onFileExtensionChange(extension: String) = _uiState.update {
-        if (extension == ".jks" || extension == ".keystore") {
+        if (extension == ".jks" || extension == ".keystore" || extension == ".p12") {
             it.copy(selectedExtension = extension)
         } else {
             it
         }
+    }
+
+    /** Cambia el tipo de algoritmo criptográfico ("RSA" o "ECDSA") */
+    fun onAlgorithmTypeChange(type: String) = _uiState.update {
+        if (type == "RSA" || type == "ECDSA") {
+            it.copy(algorithmType = type)
+        } else {
+            it
+        }
+    }
+
+    /** Cambia la curva elíptica para ECDSA ("secp256r1", "secp384r1", "secp521r1") */
+    fun onEcCurveNameChange(curve: String) = _uiState.update {
+        it.copy(ecCurveName = curve)
     }
 
     fun onAliasChange(value: String) = _uiState.update { it.copy(alias = value) }
@@ -302,6 +320,8 @@ class GeneratorViewModel(application: Application) : AndroidViewModel(applicatio
                 alias = state.alias,
                 storePassword = state.storePassword,
                 keyPassword = finalKeyPassword,
+                algorithmType = state.algorithmType,
+                ecCurveName = state.ecCurveName,
                 keySize = state.keySize,
                 validityYears = state.validityYears,
                 validityDays = state.validityDays,

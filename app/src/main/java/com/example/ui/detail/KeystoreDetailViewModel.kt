@@ -8,6 +8,8 @@ import androidx.lifecycle.viewModelScope
 import com.example.crypto.CertificateExportHelper
 import com.example.crypto.CertificateFormat
 import com.example.crypto.KeystoreExportHelper
+import com.example.crypto.KeystoreFormatConverter
+import com.example.crypto.KeystoreTargetFormat
 import com.example.crypto.StorageCompressionHelper
 import com.example.data.database.AppDatabase
 import com.example.data.model.KeystoreEntity
@@ -89,6 +91,22 @@ class KeystoreDetailViewModel(application: Application) : AndroidViewModel(appli
     // Estadísticas de compresión interna y ahorro de espacio en reposo
     private val _compressionStats = MutableStateFlow<String?>(null)
     val compressionStats: StateFlow<String?> = _compressionStats.asStateFlow()
+
+    // Estados del Conversor de Formatos (JKS ⟷ PKCS12 / .p12)
+    private val _isConvertDialogOpen = MutableStateFlow(false)
+    val isConvertDialogOpen: StateFlow<Boolean> = _isConvertDialogOpen.asStateFlow()
+
+    private val _targetConvertFormat = MutableStateFlow(KeystoreTargetFormat.PKCS12)
+    val targetConvertFormat: StateFlow<KeystoreTargetFormat> = _targetConvertFormat.asStateFlow()
+
+    private val _isConverting = MutableStateFlow(false)
+    val isConverting: StateFlow<Boolean> = _isConverting.asStateFlow()
+
+    private val _convertError = MutableStateFlow<String?>(null)
+    val convertError: StateFlow<String?> = _convertError.asStateFlow()
+
+    private val _convertedKeystore = MutableStateFlow<KeystoreEntity?>(null)
+    val convertedKeystore: StateFlow<KeystoreEntity?> = _convertedKeystore.asStateFlow()
 
     init {
         val database = AppDatabase.getDatabase(application)
@@ -528,6 +546,80 @@ class KeystoreDetailViewModel(application: Application) : AndroidViewModel(appli
                     message = result.exceptionOrNull()?.localizedMessage ?: "No se pudo guardar el workflow",
                     isSensitive = true
                 )
+            }
+        }
+    }
+
+    /**
+     * Abre el diálogo modal interactivo de conversión de formato.
+     */
+    fun openConvertDialog(suggestedFormat: KeystoreTargetFormat? = null) {
+        val current = _keystore.value
+        val defaultTarget = suggestedFormat ?: if (current?.fileName?.lowercase()?.endsWith(".p12") == true) {
+            KeystoreTargetFormat.JKS
+        } else {
+            KeystoreTargetFormat.PKCS12
+        }
+        _targetConvertFormat.value = defaultTarget
+        _convertError.value = null
+        _isConvertDialogOpen.value = true
+    }
+
+    /**
+     * Cierra el diálogo de conversión de formato.
+     */
+    fun closeConvertDialog() {
+        _isConvertDialogOpen.value = false
+        _convertError.value = null
+    }
+
+    /**
+     * Cambia el formato de destino seleccionado en el diálogo.
+     */
+    fun setTargetConvertFormat(format: KeystoreTargetFormat) {
+        _targetConvertFormat.value = format
+    }
+
+    /**
+     * Ejecuta la conversión de formato criptográfico en segundo plano y registra
+     * la nueva llave resultante en la base de datos Room.
+     */
+    fun convertFormat(
+        context: Context,
+        targetFormat: KeystoreTargetFormat,
+        storePassword: String,
+        keyPassword: String,
+        customFileName: String? = null,
+        onSuccess: (Long) -> Unit
+    ) {
+        val current = _keystore.value ?: return
+        _isConverting.value = true
+        _convertError.value = null
+
+        viewModelScope.launch {
+            val result = KeystoreFormatConverter.convertKeystore(
+                context = context,
+                sourceKeystore = current,
+                targetFormat = targetFormat,
+                targetStorePassword = storePassword.ifBlank { current.storePassword },
+                targetKeyPassword = keyPassword.ifBlank { current.keyPassword },
+                customFileName = customFileName
+            )
+
+            _isConverting.value = false
+            result.onSuccess { newEntity ->
+                val newId = repository.insertKeystore(newEntity)
+                val saved = newEntity.copy(id = newId)
+                _convertedKeystore.value = saved
+                _isConvertDialogOpen.value = false
+                _securityAlert.value = SecurityAlert(
+                    title = "Conversión Exitosa",
+                    message = "Llave convertida '${saved.fileName}' guardada en tu lista en formato ${targetFormat.label}.",
+                    isSensitive = false
+                )
+                onSuccess(newId)
+            }.onFailure { error ->
+                _convertError.value = error.localizedMessage ?: "Error desconocido durante la conversión"
             }
         }
     }

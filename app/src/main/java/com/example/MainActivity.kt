@@ -57,6 +57,7 @@ import com.example.ui.importzip.ZipImportViewModel
 import com.example.ui.navigation.AppRoutes
 import com.example.ui.navigation.NavDestination
 import com.example.ui.settings.ColorPickerScreen
+import com.example.ui.settings.CryptoGuideScreen
 import com.example.ui.settings.SettingsScreen
 import com.example.ui.settings.ThemeViewModel
 import com.example.ui.theme.MyApplicationTheme
@@ -98,6 +99,7 @@ fun KeystoreApp(themeViewModel: ThemeViewModel) {
     // Ocultar la barra inferior y top app bar general en pantallas secundarias/hijas
     val isChildScreen = currentRoute?.startsWith("keystore_detail") == true ||
         currentRoute == AppRoutes.COLOR_THEME ||
+        currentRoute == AppRoutes.CRYPTO_GUIDE ||
         currentRoute == AppRoutes.ZIP_IMPORT
 
     val destinations = listOf(
@@ -324,7 +326,10 @@ fun KeystoreApp(themeViewModel: ThemeViewModel) {
                     KeystoreDetailScreen(
                         keystoreId = keystoreId,
                         viewModel = detailViewModel,
-                        onBack = { navController.popBackStack() }
+                        onBack = { navController.popBackStack() },
+                        onNavigateToDetail = { newKeystoreId ->
+                            navController.navigate(AppRoutes.createDetailRoute(newKeystoreId))
+                        }
                     )
                 }
 
@@ -367,6 +372,9 @@ fun KeystoreApp(themeViewModel: ThemeViewModel) {
                         themeViewModel = themeViewModel,
                         onNavigateToColorTheme = {
                             navController.navigate(AppRoutes.COLOR_THEME)
+                        },
+                        onNavigateToGuide = {
+                            navController.navigate(AppRoutes.CRYPTO_GUIDE)
                         }
                     )
                 }
@@ -392,6 +400,30 @@ fun KeystoreApp(themeViewModel: ThemeViewModel) {
                 ) {
                     ColorPickerScreen(
                         themeViewModel = themeViewModel,
+                        onBack = { navController.popBackStack() }
+                    )
+                }
+
+                // Pantalla 6: Guía de Firma y Criptografía Móvil (Pantalla de Profundidad)
+                composable(
+                    route = AppRoutes.CRYPTO_GUIDE,
+                    enterTransition = {
+                        slideInHorizontally(
+                            animationSpec = tween(350, easing = FastOutSlowInEasing),
+                            initialOffsetX = { it }
+                        ) + fadeIn(animationSpec = tween(300))
+                    },
+                    exitTransition = {
+                        fadeOut(animationSpec = tween(200))
+                    },
+                    popExitTransition = {
+                        slideOutHorizontally(
+                            animationSpec = tween(300, easing = FastOutSlowInEasing),
+                            targetOffsetX = { it }
+                        ) + fadeOut(animationSpec = tween(250))
+                    }
+                ) {
+                    CryptoGuideScreen(
                         onBack = { navController.popBackStack() }
                     )
                 }

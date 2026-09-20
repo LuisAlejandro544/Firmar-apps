@@ -31,7 +31,8 @@ app/src/main/
 │   ├── MainActivity.kt                  # Actividad principal y Scaffold con NavHost
 │   │
 │   ├── crypto/                          # Motor Criptográfico y Utilidades
-│   │   ├── KeystoreGenerator.kt         # Generador de pares de claves RSA y certificados X.509
+│   │   ├── KeystoreGenerator.kt         # Generador de pares de claves RSA/ECDSA y certificados X.509
+│   │   ├── KeystoreFormatConverter.kt   # Conversión bidireccional JKS ⟷ PKCS12 (.p12 / .keystore)
 │   │   ├── KeystoreExportHelper.kt      # Compartición mediante FileProvider, copias, SAF y snippets
 │   │   ├── CertificateExportHelper.kt   # Extracción segura de certificados X.509 (.pem, .crt, .der)
 │   │   ├── StorageCompressionHelper.kt  # Motor de compresión Deflate/Gzip y empaquetador ZIP All-in-One
@@ -66,6 +67,7 @@ app/src/main/
 │       │   └── NavRoutes.kt             # Definición tipada de rutas y destinos de barra inferior
 │       ├── settings/
 │       │   ├── SettingsScreen.kt        # Menú principal de configuración, seguridad y sistema
+│       │   ├── CryptoGuideScreen.kt     # Guía y preguntas frecuentes (estándares móviles, formatos y algoritmos)
 │       │   ├── ColorPickerScreen.kt     # Selector de tema, Material You, paletas y RGB granular
 │       │   ├── ThemePreferences.kt      # Persistencia en SharedPreferences con StateFlow
 │       │   └── ThemeViewModel.kt        # Estado global del tema para la aplicación
@@ -95,7 +97,8 @@ app/src/main/
 ## 🔍 Responsabilidad de Cada Módulo
 
 ### 1. `crypto/`
-* **`KeystoreGenerator.kt`**: Implementa la lógica criptográfica sin depender de `keytool` de PC. Crea claves RSA de 2048/4096 bits y emite certificados **X.509 v3** estándar de la industria (RFC 5280) con extensiones canónicas: `BasicConstraints(false)` crítica (entidad final, no CA), `KeyUsage(digitalSignature)` crítica (autorización para firma de código Android) y generación de `SubjectKeyIdentifier` y `AuthorityKeyIdentifier` (hashes SHA-1 del par de claves para optimizar la indexación en apksigner). Calcula la validez exacta en días (desde 1 día hasta 100 años), huellas SHA-1 y SHA-256 en formato hexadecimal y guarda el archivo (`.jks` o `.keystore`) en el almacenamiento interno de la app (`filesDir/keystores/`).
+* **`KeystoreGenerator.kt`**: Implementa la lógica criptográfica sin depender de `keytool` de PC. Soporta generación asimétrica dual: pares de claves RSA (2048/4096 bits) y **Curvas Elípticas ECDSA** (`secp256r1 / NIST P-256`, `secp384r1 / NIST P-384`, `secp521r1 / NIST P-521`). Emite certificados **X.509 v3** estándar (RFC 5280) con firma adaptativa (`SHA256withRSA`, `SHA256withECDSA`, `SHA384withECDSA`, `SHA512withECDSA`) y extensiones canónicas: `BasicConstraints(false)` crítica, `KeyUsage(digitalSignature)` crítica y generación de `SubjectKeyIdentifier` y `AuthorityKeyIdentifier`. Permite guardar directamente en formatos `.jks`, `.keystore` y `.p12` (PKCS#12 universal).
+* **`KeystoreFormatConverter.kt`**: Utilidad criptográfica especializada en la conversión bidireccional entre almacenes Java KeyStore (`JKS`) y `PKCS12 (.p12 / .keystore)` sin alterar la clave privada subyacente ni invalidar la cadena de certificados X.509 y sus huellas digitales SHA-1 y SHA-256. Permite opcionalmente redefinir o conservar contraseñas de almacén y alias, y registra la nueva llave en Room cifrada con AES-256-GCM.
 * **`SecureCredentialsCipher.kt`**: Gestor de cifrado y descifrado de credenciales sensibles en reposo mediante **AES-256-GCM** autenticado, respaldado por hardware seguro a través de **Android KeyStore Provider** (TEE / StrongBox). Incorpora generación de IV de 12 bytes aleatorio, tag de autenticación de 128 bits, empaquetado Base64 multiplataforma y compatibilidad hacia atrás transparente con registros preexistentes en texto plano.
 * **`PasswordSecurityEngine.kt`**: Motor de generación y auditoría de contraseñas de alta entropía asistido por `SecureRandom` y el analizador de algoritmos de diccionario `zxcvbn`. Ofrece 3 longitudes estándar (16, 24 y 32 caracteres) con distribución garantizada de mayúsculas, minúsculas, dígitos y símbolos no ambiguos (evitando caracteres conflictivos en compilaciones de Gradle y terminales), asegurando score 4/4 (indescifrables). Incluye auditoría en tiempo real para alertar de forma nativa en la UI si el usuario introduce contraseñas vulnerables a descifrado.
 * **`KeystoreExportHelper.kt`**: Proporciona métodos para:
@@ -117,11 +120,13 @@ app/src/main/
 
 ### 3. `ui/`
 * **`MainActivity.kt`**: Contenedor principal con `NavHost`, `CenterAlignedTopAppBar` y `NavigationBar`. Implementa acondicionamiento quirúrgico de `contentWindowInsets` para que pantallas secundarias (`KeystoreDetailScreen`, `ColorPickerScreen`) gobiernen su propio `Scaffold` y `TopAppBar` pegados a la barra de estado, sin duplicación de insets ni espacios residuales.
-* **`GeneratorScreen.kt` & `GeneratorViewModel.kt`**: Pantalla de creación asistida con selector dual de formato (`.jks` / `.keystore`), autocompletado y sufijo inteligente de nombres de archivo, control deslizante continuo de validez (1 día a 100 años) con cálculo dinámico de caducidad y accesos rápidos, datos de prueba y validaciones.
+* **`GeneratorScreen.kt` & `GeneratorViewModel.kt`**: Pantalla de creación asistida con selector de algoritmo asimétrico (RSA 2048/4096 vs ECDSA Curvas Elípticas P-256, P-384, P-521), selector triple de formato (`.jks`, `.keystore` y `.p12`), autocompletado y sufijo inteligente de nombres de archivo, control deslizante continuo de validez (1 día a 100 años) con cálculo dinámico de caducidad y accesos rápidos, generador de contraseñas ultra seguras asistido por `zxcvbn`, datos de prueba y validaciones.
 * **`KeystoreListScreen.kt` & `KeystoreListViewModel.kt`**: Lista de keystores con buscador en vivo, acceso táctil a la restauración de paquetes ZIP y tarjeta con metadata esencial.
 * **`ZipImportScreen.kt` & `ZipImportViewModel.kt`**: Flujo completo de restauración e importación de paquetes ZIP y keystores externas. Integra selector de documentos SAF (`OpenDocument`), descompresión aislada con prevención anti Zip-Slip, resumen visual de los artefactos detectados en el ZIP con chips de colores, formulario con autocompletado inteligente de credenciales (extraídas de `signingConfigs` o `info.txt`), validación de clave privada con `KeyStore` nativo, extracción de huellas SHA-256 y guardado en Room con cifrado AES-256-GCM.
 * **`KeystoreDetailScreen.kt` & `KeystoreDetailViewModel.kt`**:
   - Visualización completa de credenciales y copiado seguro con auto-limpieza a los 2 minutos.
+  - **Conversión de Formatos (JKS ⟷ PKCS12 / .p12):** Herramienta integrada con diálogo interactivo `KeystoreConvertDialog` que permite convertir la llave actual a otro formato de almacén sin modificar las huellas digitales del certificado, con personalización de nombres y contraseñas.
+  - **Identificación de Formato y Algoritmo:** Detección en vivo de si el archivo es JKS, PKCS12 (.p12) o .keystore y badges para firmas con Curvas Elípticas (ECDSA).
   - **Paquete Completo Comprimido All-in-One (.zip):** Tarjeta dedicada con barra de progreso, generación de ZIP ultra-comprimido, opción de guardado nativo con Storage Access Framework (`CreateDocument`) y botón para compartir mediante `FileProvider`.
   - **Exportación Individual SAF:** Botones dedicados para guardar en almacenamiento nativo el almacén (`.jks`/`.keystore`), la cadena Base64 (`.base64`), el bloque Gradle (`.gradle.kts`) y el pipeline CI/CD (`.yml`).
   - **Telemetría de Compresión Deflate:** Visualización en tiempo real del tamaño en bytes original frente al tamaño con compresión máxima y porcentaje de reducción en disco.
@@ -129,8 +134,9 @@ app/src/main/
   - Tarjeta con Workflow completo de GitHub Actions CI/CD con selector de pestañas animadas (`SecondaryTabRow`).
   - Generación de Base64 con 1 solo clic para CI/CD con visor integrado y opciones de exportación.
   - Sistema de notificaciones in-app de seguridad (`SecurityNotificationBanner`) que advierte sobre los riesgos del portapapeles sin depender de toasts nativos de Android.
-* **`SettingsScreen.kt` & `ColorPickerScreen.kt` & `ThemeViewModel.kt`**:
-  - `SettingsScreen.kt`: Menú de opciones organizado por categorías (Apariencia, Seguridad/Almacenamiento, Información técnica del sistema y Acceso directo a Crypto Lab).
+* **`SettingsScreen.kt` & `CryptoGuideScreen.kt` & `ColorPickerScreen.kt` & `ThemeViewModel.kt`**:
+  - `SettingsScreen.kt`: Menú de opciones organizado por categorías (Apariencia, Guía y Aprendizaje Criptográfico, Seguridad/Almacenamiento, Información técnica del sistema y Acceso directo a Crypto Lab).
+  - `CryptoGuideScreen.kt`: Pantalla dedicada de Guía Criptográfica y FAQ para desarrolladores móviles sin PC. Dispone de buscador en tiempo real, filtro por chips de categorías (Formatos, Algoritmos, Validez, Seguridad), tarjetas con acordeón interactivo y respuestas profundas sobre los formatos recomendados por Google y la industria (.jks vs .p12 vs .keystore), comparativas RSA vs ECDSA, validez de 25-100 años, esquemas v1/v2/v3 y gestión segura de firmas.
   - `ColorPickerScreen.kt`: Pantalla dedicada para personalización del tema. Permite alternar entre Seguir el sistema, Modo claro y Modo oscuro, activar Material You (colores dinámicos en Android 12+), seleccionar paletas predefinidas o definir cualquier color RGB al 100% con vista previa en vivo.
   - `ThemePreferences.kt`: Almacenamiento local mediante `SharedPreferences` que expone un `StateFlow` reactivo para que los cambios se reflejen de inmediato en toda la aplicación.
 * **`com.example.ui.debug` (Crypto Lab Tools)**:

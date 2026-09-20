@@ -26,9 +26,13 @@ import java.security.cert.Certificate
 import java.util.Calendar
 import java.util.Date
 
+import java.security.spec.ECGenParameterSpec
+
 /**
  * Parámetros requeridos para la generación de un nuevo Keystore y certificado autofirmado.
- * Permite especificar la validez tanto en años como en días exactos (desde 1 día hasta 100 años).
+ * Permite especificar la validez tanto en años como en días exactos (desde 1 día hasta 100 años),
+ * así como el algoritmo criptográfico (RSA clásico o ECDSA con curvas elípticas modernas)
+ * y el formato del contenedor (.jks, .keystore o .p12 / PKCS12).
  */
 data class KeystoreParams(
     val title: String,
@@ -36,7 +40,9 @@ data class KeystoreParams(
     val alias: String,
     val storePassword: String,
     val keyPassword: String,
-    val keySize: Int = 2048,
+    val algorithmType: String = "RSA", // "RSA" o "ECDSA"
+    val ecCurveName: String = "secp256r1", // "secp256r1" (NIST P-256), "secp384r1", "secp521r1"
+    val keySize: Int = 2048, // Para RSA: 2048 o 4096 bits
     val validityYears: Int = 25,
     val validityDays: Int = validityYears * 365,
     val commonName: String = "Android Developer",
@@ -69,10 +75,11 @@ object KeystoreGenerator {
     suspend fun generateKeystore(context: Context, params: KeystoreParams): Result<KeystoreEntity> =
         withContext(Dispatchers.IO) {
             runCatching {
-                // 1. Validar y normalizar el nombre del archivo
+                // 1. Validar y normalizar el nombre del archivo (soporta .jks, .keystore y .p12)
                 val sanitizedBaseName = params.fileName.trim().replace(Regex("[^a-zA-Z0-9._-]"), "_")
                 val finalFileName = if (sanitizedBaseName.endsWith(".jks", ignoreCase = true) ||
-                    sanitizedBaseName.endsWith(".keystore", ignoreCase = true)
+                    sanitizedBaseName.endsWith(".keystore", ignoreCase = true) ||
+                    sanitizedBaseName.endsWith(".p12", ignoreCase = true)
                 ) {
                     sanitizedBaseName
                 } else {
@@ -86,11 +93,39 @@ object KeystoreGenerator {
                 }
                 val destinationFile = File(keystoresDir, finalFileName)
 
-                // 3. Generar par de claves RSA (2048 o 4096 bits)
+                // 3. Generar par de claves: Curvas Elípticas (ECDSA) o RSA clásico
                 val secureRandom = SecureRandom()
-                val keyPairGenerator = KeyPairGenerator.getInstance("RSA")
-                keyPairGenerator.initialize(params.keySize, secureRandom)
-                val keyPair = keyPairGenerator.generateKeyPair()
+                val isEcdsa = params.algorithmType.equals("ECDSA", ignoreCase = true)
+
+                val (keyPair, signatureAlgorithm, keyAlgorithmLabel) = if (isEcdsa) {
+                    val keyPairGenerator = runCatching {
+                        KeyPairGenerator.getInstance("EC", bcProvider)
+                    }.recoverCatching {
+                        KeyPairGenerator.getInstance("EC")
+                    }.getOrThrow()
+
+                    val ecSpec = ECGenParameterSpec(params.ecCurveName)
+                    keyPairGenerator.initialize(ecSpec, secureRandom)
+                    val pair = keyPairGenerator.generateKeyPair()
+
+                    val sigAlg = when (params.ecCurveName) {
+                        "secp384r1" -> "SHA384withECDSA"
+                        "secp521r1" -> "SHA512withECDSA"
+                        else -> "SHA256withECDSA"
+                    }
+                    val friendlyCurve = when (params.ecCurveName) {
+                        "secp256r1" -> "ECDSA (secp256r1 / P-256)"
+                        "secp384r1" -> "ECDSA (secp384r1 / P-384)"
+                        "secp521r1" -> "ECDSA (secp521r1 / P-521)"
+                        else -> "ECDSA (${params.ecCurveName})"
+                    }
+                    Triple(pair, sigAlg, friendlyCurve)
+                } else {
+                    val keyPairGenerator = KeyPairGenerator.getInstance("RSA")
+                    keyPairGenerator.initialize(params.keySize, secureRandom)
+                    val pair = keyPairGenerator.generateKeyPair()
+                    Triple(pair, "SHA256withRSA", "RSA ${params.keySize} bits")
+                }
 
                 // 4. Construir la identidad del sujeto X.500 (Subject / Issuer)
                 val nameBuilder = X500NameBuilder(BCStyle.INSTANCE)
@@ -168,9 +203,9 @@ object KeystoreGenerator {
                 // Usar el motor de firma del sistema (Conscrypt/OpenSSL nativo en Android)
                 // con fallback a la instancia de Bouncy Castle en memoria
                 val contentSigner = runCatching {
-                    JcaContentSignerBuilder("SHA256withRSA").build(keyPair.private)
+                    JcaContentSignerBuilder(signatureAlgorithm).build(keyPair.private)
                 }.recoverCatching {
-                    JcaContentSignerBuilder("SHA256withRSA")
+                    JcaContentSignerBuilder(signatureAlgorithm)
                         .setProvider(bcProvider)
                         .build(keyPair.private)
                 }.getOrThrow()
@@ -216,7 +251,7 @@ object KeystoreGenerator {
                     alias = params.alias.trim(),
                     storePassword = params.storePassword,
                     keyPassword = params.keyPassword,
-                    keyAlgorithm = "RSA ${params.keySize} bits",
+                    keyAlgorithm = keyAlgorithmLabel,
                     validityYears = if (totalDays >= 365) totalDays / 365 else 1,
                     commonName = params.commonName.trim(),
                     organization = params.organization.trim(),

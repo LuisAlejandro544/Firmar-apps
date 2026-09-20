@@ -28,7 +28,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Badge
+import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Business
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.ExpandLess
@@ -217,7 +219,7 @@ fun GeneratorScreen(
                         singleLine = true
                     )
 
-                    // Selector de formato de archivo (.jks o .keystore) con FlowRow adaptativo para pantallas móviles
+                    // Selector de formato de archivo (.jks, .keystore o .p12) con FlowRow adaptativo para pantallas móviles
                     Text(
                         text = "Formato de archivo:",
                         style = MaterialTheme.typography.bodyMedium,
@@ -239,6 +241,12 @@ fun GeneratorScreen(
                             onClick = { viewModel.onFileExtensionChange(".keystore") },
                             label = { Text(".keystore (Clásico / Flutter)") },
                             modifier = Modifier.testTag("chip_format_keystore")
+                        )
+                        FilterChip(
+                            selected = state.selectedExtension == ".p12",
+                            onClick = { viewModel.onFileExtensionChange(".p12") },
+                            label = { Text(".p12 (PKCS#12 Universal)") },
+                            modifier = Modifier.testTag("chip_format_p12")
                         )
                     }
 
@@ -655,9 +663,9 @@ fun GeneratorScreen(
                         color = MaterialTheme.colorScheme.primary
                     )
 
-                    // Tamaño de la clave RSA con FlowRow adaptativo para pantallas móviles
+                    // Selector de Algoritmo Criptográfico (RSA clásico o ECDSA con Curvas Elípticas)
                     Text(
-                        text = "Tamaño de Clave RSA:",
+                        text = "Algoritmo Criptográfico:",
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Medium
                     )
@@ -667,17 +675,119 @@ fun GeneratorScreen(
                         verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         FilterChip(
-                            selected = state.keySize == 2048,
-                            onClick = { viewModel.onKeySizeChange(2048) },
-                            label = { Text("RSA 2048 bits (Estándar)") },
-                            modifier = Modifier.testTag("chip_rsa_2048")
+                            selected = state.algorithmType == "RSA",
+                            onClick = { viewModel.onAlgorithmTypeChange("RSA") },
+                            label = { Text("RSA (Compatibilidad universal)") },
+                            modifier = Modifier.testTag("chip_algo_rsa"),
+                            leadingIcon = {
+                                if (state.algorithmType == "RSA") {
+                                    Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
+                                }
+                            }
                         )
                         FilterChip(
-                            selected = state.keySize == 4096,
-                            onClick = { viewModel.onKeySizeChange(4096) },
-                            label = { Text("RSA 4096 bits") },
-                            modifier = Modifier.testTag("chip_rsa_4096")
+                            selected = state.algorithmType == "ECDSA",
+                            onClick = { viewModel.onAlgorithmTypeChange("ECDSA") },
+                            label = { Text("ECDSA (Curva Elíptica)") },
+                            modifier = Modifier.testTag("chip_algo_ecdsa"),
+                            leadingIcon = {
+                                if (state.algorithmType == "ECDSA") {
+                                    Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
+                                }
+                            }
                         )
+                    }
+
+                    // Opciones específicas según el algoritmo seleccionado
+                    if (state.algorithmType == "RSA") {
+                        Text(
+                            text = "Tamaño de Clave RSA:",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium
+                        )
+                        FlowRow(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            FilterChip(
+                                selected = state.keySize == 2048,
+                                onClick = { viewModel.onKeySizeChange(2048) },
+                                label = { Text("RSA 2048 bits (Recomendado)") },
+                                modifier = Modifier.testTag("chip_rsa_2048")
+                            )
+                            FilterChip(
+                                selected = state.keySize == 4096,
+                                onClick = { viewModel.onKeySizeChange(4096) },
+                                label = { Text("RSA 4096 bits (Ultra seguro)") },
+                                modifier = Modifier.testTag("chip_rsa_4096")
+                            )
+                        }
+                    } else {
+                        // Selector de Curva Elíptica (ECDSA)
+                        Text(
+                            text = "Curva Elíptica (NIST / ANSI X9.62):",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium
+                        )
+                        FlowRow(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            FilterChip(
+                                selected = state.ecCurveName == "secp256r1",
+                                onClick = { viewModel.onEcCurveNameChange("secp256r1") },
+                                label = { Text("secp256r1 / P-256 (Estándar Android)") },
+                                modifier = Modifier.testTag("chip_curve_p256")
+                            )
+                            FilterChip(
+                                selected = state.ecCurveName == "secp384r1",
+                                onClick = { viewModel.onEcCurveNameChange("secp384r1") },
+                                label = { Text("secp384r1 / P-384 (Alta seguridad)") },
+                                modifier = Modifier.testTag("chip_curve_p384")
+                            )
+                            FilterChip(
+                                selected = state.ecCurveName == "secp521r1",
+                                onClick = { viewModel.onEcCurveNameChange("secp521r1") },
+                                label = { Text("secp521r1 / P-521 (Máxima seguridad)") },
+                                modifier = Modifier.testTag("chip_curve_p521")
+                            )
+                        }
+
+                        // Banner explicativo sobre ECDSA
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f))
+                                .padding(12.dp)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.Top,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Bolt,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    Text(
+                                        text = "Ventajas de Curvas Elípticas (ECDSA)",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                                    )
+                                    Text(
+                                        text = "Firmas más compactas y cálculo matemático ultra veloz. Consume menos batería en el dispositivo móvil y ofrece una robustez criptográfica superior a RSA 3072 con apenas 256 bits. Plenamente compatible con Android APK Signature Scheme v2, v3 y apksigner.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                                    )
+                                }
+                            }
+                        }
                     }
 
                     // Validez con Slider interactivo (1 día a 100 años) y Accesos Rápidos

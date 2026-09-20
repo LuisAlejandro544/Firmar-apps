@@ -32,6 +32,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Archive
+import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Code
@@ -47,7 +48,9 @@ import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.Terminal
+import androidx.compose.material.icons.filled.Transform
 import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
@@ -60,15 +63,18 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SecondaryTabRow
 import androidx.compose.material3.SuggestionChip
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRowDefaults
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
@@ -76,6 +82,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import com.example.crypto.KeystoreTargetFormat
+import com.example.data.model.KeystoreEntity
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -111,7 +121,8 @@ fun KeystoreDetailScreen(
     keystoreId: Long,
     viewModel: KeystoreDetailViewModel,
     onBack: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onNavigateToDetail: ((Long) -> Unit)? = null
 ) {
     val keystore by viewModel.keystore.collectAsStateWithLifecycle()
     val isStorePassRevealed by viewModel.isStorePasswordRevealed.collectAsStateWithLifecycle()
@@ -131,6 +142,13 @@ fun KeystoreDetailScreen(
     val isPackagingZip by viewModel.isPackagingZip.collectAsStateWithLifecycle()
     val zipBundleError by viewModel.zipBundleError.collectAsStateWithLifecycle()
     val compressionStats by viewModel.compressionStats.collectAsStateWithLifecycle()
+
+    // Estados para Conversión JKS ⟷ PKCS12 (.p12)
+    val isConvertDialogOpen by viewModel.isConvertDialogOpen.collectAsStateWithLifecycle()
+    val targetConvertFormat by viewModel.targetConvertFormat.collectAsStateWithLifecycle()
+    val isConverting by viewModel.isConverting.collectAsStateWithLifecycle()
+    val convertError by viewModel.convertError.collectAsStateWithLifecycle()
+    val convertedKeystore by viewModel.convertedKeystore.collectAsStateWithLifecycle()
 
     val context = LocalContext.current
     var showDeleteConfirm by remember { mutableStateOf(false) }
@@ -247,6 +265,11 @@ fun KeystoreDetailScreen(
                 val dateFormat = SimpleDateFormat("dd MMMM yyyy, HH:mm", Locale.getDefault())
                 val formattedDate = dateFormat.format(Date(currentKeystore.createdAt))
                 val formattedSize = "%.1f KB".format(currentKeystore.fileSizeBytes / 1024.0)
+                val detectedFormat = when {
+                    currentKeystore.fileName.lowercase().endsWith(".p12") -> "PKCS#12 (.p12 Universal)"
+                    currentKeystore.fileName.lowercase().endsWith(".keystore") -> "Keystore (.keystore Clásico)"
+                    else -> "Java KeyStore (.jks Estándar)"
+                }
 
                 Column(
                     modifier = Modifier
@@ -283,12 +306,20 @@ fun KeystoreDetailScreen(
                                 )
                             }
 
+                            DetailItemRow(label = "Formato de almacén", value = detectedFormat)
                             DetailItemRow(label = "Nombre de archivo", value = currentKeystore.fileName) {
                                 viewModel.copyNonSensitiveValue(context, "Nombre de archivo", currentKeystore.fileName)
                             }
                             DetailItemRow(label = "Tamaño", value = formattedSize)
                             DetailItemRow(label = "Fecha de generación", value = formattedDate)
                             DetailItemRow(label = "Algoritmo y tamaño", value = currentKeystore.keyAlgorithm)
+                            if (currentKeystore.keyAlgorithm.contains("ECDSA", ignoreCase = true) || currentKeystore.keyAlgorithm.contains("EC", ignoreCase = true)) {
+                                SuggestionChip(
+                                    onClick = { },
+                                    label = { Text("Curva Elíptica Moderna (ECDSA)", fontSize = 12.sp, fontWeight = FontWeight.Bold) },
+                                    icon = { Icon(Icons.Default.Bolt, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary) }
+                                )
+                            }
                             DetailItemRow(label = "Validez", value = "${currentKeystore.validityYears} años")
                             if (compressionStats != null) {
                                 DetailItemRow(label = "Optimización Deflate", value = compressionStats!!)
@@ -333,6 +364,84 @@ fun KeystoreDetailScreen(
                             }
                             DetailItemRow(label = "Código de País (C)", value = currentKeystore.countryCode) {
                                 viewModel.copyNonSensitiveValue(context, "Código de País", currentKeystore.countryCode)
+                            }
+                        }
+                    }
+
+                    // Tarjeta: Conversor de Formatos Criptográficos (JKS ⟷ PKCS12 / .p12)
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("detail_convert_format_card"),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surface
+                        ),
+                        border = androidx.compose.foundation.BorderStroke(
+                            width = 1.dp,
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)
+                        ),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.SwapHoriz,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                                Column {
+                                    Text(
+                                        text = "Conversor JKS ⟷ PKCS12 (.p12)",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        text = "Transforma tu firma a otros estándares de la industria",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                                    .padding(12.dp)
+                            ) {
+                                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Text(
+                                        text = "Formato actual: $detectedFormat",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                    Text(
+                                        text = "Convierte de JKS a PKCS12 (.p12) o viceversa para máxima compatibilidad con fastlane, CI/CD, servidores y compilaciones multiplataforma sin perder la clave privada ni alterar las huellas del certificado.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+
+                            FilledTonalButton(
+                                onClick = { viewModel.openConvertDialog() },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("open_convert_format_dialog_button")
+                            ) {
+                                Icon(Icons.Default.Transform, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Convertir a otro Formato (.p12 / .jks)")
                             }
                         }
                     }
@@ -1242,9 +1351,10 @@ fun KeystoreDetailScreen(
                                 .testTag("save_keystore_saf_button"),
                             shape = RoundedCornerShape(12.dp)
                         ) {
+                            val fileExt = currentKeystore.fileName.substringAfterLast(".", "jks")
                             Icon(Icons.Default.FileDownload, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("Guardar .jks", fontSize = 13.sp)
+                            Text("Guardar .$fileExt", fontSize = 13.sp)
                         }
                     }
 
@@ -1288,6 +1398,30 @@ fun KeystoreDetailScreen(
                         TextButton(onClick = { showDeleteConfirm = false }) {
                             Text("Cancelar")
                         }
+                    }
+                )
+            }
+
+            // Diálogo interactivo de conversión de formato JKS ⟷ PKCS12 (.p12)
+            if (isConvertDialogOpen && currentKeystore != null) {
+                KeystoreConvertDialog(
+                    sourceKeystore = currentKeystore,
+                    selectedTargetFormat = targetConvertFormat,
+                    isConverting = isConverting,
+                    errorMessage = convertError,
+                    onFormatSelected = { viewModel.setTargetConvertFormat(it) },
+                    onDismiss = { viewModel.closeConvertDialog() },
+                    onConvert = { targetFormat, storePassword, keyPassword, customFileName ->
+                        viewModel.convertFormat(
+                            context = context,
+                            targetFormat = targetFormat,
+                            storePassword = storePassword,
+                            keyPassword = keyPassword,
+                            customFileName = customFileName,
+                            onSuccess = { newKeystoreId ->
+                                onNavigateToDetail?.invoke(newKeystoreId)
+                            }
+                        )
                     }
                 )
             }
@@ -1422,4 +1556,189 @@ private fun DetailItemRow(
             }
         }
     }
+}
+
+/**
+ * Diálogo modal para la conversión bidireccional entre formatos de firmas y keystores
+ * (JKS ⟷ PKCS12 / .p12 y .keystore clásico).
+ * Permite seleccionar el formato de destino, personalizar el nombre del archivo
+ * resultante y elegir si mantener las contraseñas originales o definir unas nuevas.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun KeystoreConvertDialog(
+    sourceKeystore: KeystoreEntity,
+    selectedTargetFormat: KeystoreTargetFormat,
+    isConverting: Boolean,
+    errorMessage: String?,
+    onFormatSelected: (KeystoreTargetFormat) -> Unit,
+    onDismiss: () -> Unit,
+    onConvert: (targetFormat: KeystoreTargetFormat, storePassword: String, keyPassword: String, customFileName: String?) -> Unit
+) {
+    var keepSamePasswords by remember { mutableStateOf(true) }
+    var newStorePassword by remember { mutableStateOf("") }
+    var newKeyPassword by remember { mutableStateOf("") }
+
+    val baseNameWithoutExt = remember(sourceKeystore.fileName) {
+        sourceKeystore.fileName.substringBeforeLast(".")
+    }
+    var customFileName by remember(selectedTargetFormat) {
+        mutableStateOf("${baseNameWithoutExt}_converted${selectedTargetFormat.extension}")
+    }
+
+    AlertDialog(
+        onDismissRequest = { if (!isConverting) onDismiss() },
+        title = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.SwapHoriz,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Text(
+                    text = "Convertir Formato de Firma",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = "Selecciona el formato de destino para crear una copia exacta firmada con la misma clave privada y certificado:",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                // Chips de selección de formato
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    KeystoreTargetFormat.entries.forEach { format ->
+                        FilterChip(
+                            selected = selectedTargetFormat == format,
+                            onClick = { onFormatSelected(format) },
+                            label = { Text("${format.extension} (${format.label})") },
+                            modifier = Modifier.testTag("convert_chip_${format.name.lowercase()}"),
+                            leadingIcon = {
+                                if (selectedTargetFormat == format) {
+                                    Icon(Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(16.dp))
+                                }
+                            }
+                        )
+                    }
+                }
+
+                Text(
+                    text = selectedTargetFormat.description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Medium
+                )
+
+                // Nombre del archivo resultante
+                OutlinedTextField(
+                    value = customFileName,
+                    onValueChange = { customFileName = it },
+                    label = { Text("Nombre del archivo convertido") },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("convert_file_name_input"),
+                    singleLine = true
+                )
+
+                // Switch de contraseñas
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Usar contraseñas actuales",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Text(
+                            text = "Conserva las claves de acceso de la llave de origen",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = keepSamePasswords,
+                        onCheckedChange = { keepSamePasswords = it },
+                        modifier = Modifier.testTag("convert_same_password_switch")
+                    )
+                }
+
+                if (!keepSamePasswords) {
+                    OutlinedTextField(
+                        value = newStorePassword,
+                        onValueChange = { newStorePassword = it },
+                        label = { Text("Nueva contraseña de almacén") },
+                        placeholder = { Text("Mínimo 6 caracteres") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                    OutlinedTextField(
+                        value = newKeyPassword,
+                        onValueChange = { newKeyPassword = it },
+                        label = { Text("Nueva contraseña de clave") },
+                        placeholder = { Text("Mínimo 6 caracteres") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                }
+
+                if (errorMessage != null) {
+                    Text(
+                        text = errorMessage,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val finalStorePass = if (keepSamePasswords) sourceKeystore.storePassword else newStorePassword
+                    val finalKeyPass = if (keepSamePasswords) sourceKeystore.keyPassword else newKeyPassword
+                    onConvert(selectedTargetFormat, finalStorePass, finalKeyPass, customFileName.trim())
+                },
+                enabled = !isConverting && (keepSamePasswords || (newStorePassword.length >= 6 && newKeyPassword.length >= 6)),
+                modifier = Modifier.testTag("execute_conversion_button")
+            ) {
+                if (isConverting) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        color = MaterialTheme.colorScheme.onPrimary,
+                        strokeWidth = 2.dp
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Convirtiendo...")
+                } else {
+                    Text("Iniciar Conversión")
+                }
+            }
+        },
+        dismissButton = {
+            if (!isConverting) {
+                TextButton(onClick = onDismiss) {
+                    Text("Cancelar")
+                }
+            }
+        }
+    )
 }

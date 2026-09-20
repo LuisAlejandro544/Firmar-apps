@@ -185,6 +185,55 @@ Este documento define el plan de evolución y las próximas funcionalidades de l
 
 ---
 
+### ✅ Fase 6.1: Curvas Elípticas (ECDSA), Formato Universal .p12 y Conversor JKS ⟷ PKCS12 (Completada)
+- [x] **Soporte de Algoritmos Asimétricos Modernos de Curvas Elípticas (ECDSA):**
+  - [x] Generación de pares de claves mediante `ECGenParameterSpec` en curvas estándar NIST:
+    - [x] `secp256r1 (NIST P-256)`: Equivalente a RSA 3072 con una fracción minúscula de peso computacional.
+    - [x] `secp384r1 (NIST P-384)`: Nivel de seguridad TOP-SECRET militar.
+    - [x] `secp521r1 (NIST P-521)`: Máxima resistencia criptográfica teórica de curvas de Weierstrass.
+  - [x] Algoritmos de firma digital adaptativos: `SHA256withECDSA`, `SHA384withECDSA` y `SHA512withECDSA`.
+  - [x] Certificados X.509 v3 con clave pública EC y OIDs correspondientes.
+  - [x] Selector ergonómico en formulario (`GeneratorScreen`): elección entre RSA Clásico (2048/4096) y Curva Elíptica (P-256, P-384, P-521).
+- [x] **Soporte de Formato Universal `.p12` (PKCS#12 Universal):**
+  - [x] Selector de extensión triple: `.jks` (Android Estándar), `.keystore` (Clásico/Flutter) y `.p12` (Estándar Universal de la Industria).
+  - [x] Manejo directo en `KeystoreGenerator` con provider Bouncy Castle para serialización binaria nativa PKCS12.
+- [x] **Conversor Bidireccional de Formatos Criptográficos (`KeystoreFormatConverter`):**
+  - [x] Conversión exacta entre `JKS` y `PKCS12 (.p12 / .keystore)` sin alterar la clave privada ni el certificado X.509.
+  - [x] Verificación de huellas SHA-256 y SHA-1 idénticas tras la conversión para garantizar que el APK firmado mantenga su identidad ante Google Play o tiendas de apps.
+  - [x] Opción de conservar las contraseñas originales o asignar contraseñas nuevas a la llave convertida.
+  - [x] Personalización del nombre de archivo resultante (`mi_llave_converted.p12`).
+  - [x] Registro automático de la nueva llave en Room con cifrado AES-256-GCM.
+- [x] **Interfaz de Conversión en Detalle (`KeystoreDetailScreen`):**
+  - [x] Detección visual del formato actual (.jks, .p12, .keystore) e indicador/badge de Curva Elíptica si aplica.
+  - [x] Tarjeta de conversión dedicada con botón de acción.
+  - [x] Diálogo modal interactivo con selección de formato de destino mediante FilterChips, switch de contraseñas y validaciones.
+  - [x] Redirección fluida a la nueva keystore convertida al finalizar.
+
+---
+
+### ✅ Fase 6.2: Guía de Firma y Criptografía Móvil (Completada)
+- [x] **Pantalla Dedicada de Guía Técnica (`CryptoGuideScreen`):**
+  - [x] Buscador en tiempo real de dudas técnicas con teclado en pantalla.
+  - [x] Filtros por categorías temáticas con chips táctiles: Formatos, Algoritmos, Validez y Seguridad.
+  - [x] Tarjetas interactivas colapsables (acordeón animado con `animateContentSize` y flechas rotativas).
+  - [x] Badges temáticos ("Estándar Oficial", "Recomendado", "Comparativa", "Importante", "Crítico").
+  - [x] Respuestas técnicas y didácticas sobre:
+    - [x] Formato más recomendable en la industria móvil (PKCS#12, desuso de JKS, convenciones .jks vs .p12).
+    - [x] Elección de algoritmo: RSA 2048/4096 (compatibilidad universal) vs ECDSA (curvas elípticas ligeras).
+    - [x] RSA 2048 vs RSA 4096 bits.
+    - [x] Diferencias reales entre `.jks`, `.keystore` y `.p12`.
+    - [x] Compatibilidad total al convertir formatos sin romper actualizaciones de apps.
+    - [x] Validez de la keystore (25 a 100 años) y consecuencias de caducidad.
+    - [x] Qué ocurre si se pierde la firma o las contraseñas.
+    - [x] Utilidad de las huellas digitales SHA-256 y SHA-1 en Firebase y Google Play.
+    - [x] Seguridad al compartir certificados públicos (.pem, .crt, .der).
+    - [x] Explicación de esquemas de firma de Android (v1, v2 y v3).
+- [x] **Punto de Entrada en Configuración (`SettingsScreen`):**
+  - [x] Nueva tarjeta destacada en la sección "GUÍA Y APRENDIZAJE CRIPTOGRÁFICO".
+  - [x] Navegación desacoplada y fluida en `MainActivity.kt` con animación direccional y respeto de insets edge-to-edge.
+
+---
+
 ### 🔮 Fase 7: Firma Móvil de APKs y Zipalign Integrado (Próximo Sprint)
 - [ ] Herramienta para seleccionar un APK o AAB no firmado en el almacenamiento del dispositivo.
 - [ ] Firma digital móvil con APK Signature Scheme v1 (Jar Signature), v2 (APK Signing Block) y v3.

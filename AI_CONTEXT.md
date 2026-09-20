@@ -27,12 +27,18 @@ Keystore Creator es una aplicación nativa para Android cuyo objetivo es permiti
 
 ## 🔐 Peculiaridades Criptográficas en Android (CRÍTICO)
 
-### 1. Formato PKCS12 vs JKS Clásico y Soporte Dual (.jks y .keystore)
-- En versiones modernas de Android y Java (JDK 9+), el formato predeterminado y recomendado por Google para `apksigner` es **PKCS12** (tanto con extensión `.jks` como `.keystore`).
-- La aplicación soporta explícitamente ambas extensiones (`.jks` y `.keystore`). Al escribir en el campo de nombre, el sistema detecta si el usuario escribió la extensión y la separa automáticamente, evitando nombres duplicados como `mi_llave.jks.jks` o `mi_llave.keystore.keystore`.
-- Bouncy Castle y el runtime de Android manejan PKCS12 con soporte completo para almacenar la clave privada RSA y la cadena de certificados X.509 v3.
+### 1. Formato PKCS12 vs JKS Clásico, Soporte Triple (.jks, .keystore, .p12) y Conversor
+- En versiones modernas de Android y Java (JDK 9+), el formato predeterminado y recomendado por Google para `apksigner` es **PKCS12** (con extensiones `.jks`, `.keystore` o `.p12`).
+- La aplicación soporta explícitamente las tres extensiones (`.jks`, `.keystore` y `.p12`). Al escribir en el campo de nombre, el sistema detecta si el usuario escribió la extensión y la separa automáticamente, evitando nombres duplicados como `mi_llave.jks.jks` o `mi_llave.p12.p12`.
+- **Conversor Bidireccional JKS ⟷ PKCS12 (`KeystoreFormatConverter`):** Permite migrar archivos entre ambos tipos de almacén. Al leer un JKS existente se utiliza el provider `BouncyCastleProvider()` para evitar problemas con proveedores desactualizados de Android, y se exporta a PKCS12 preservando byte a byte el par asimétrico y la cadena de certificados X.509 v3.
 
-### 2. Estándar X.509 v3 Completo y Extensiones Canónicas (RFC 5280)
+### 2. Soporte de Curvas Elípticas (ECDSA) vs RSA
+- **Generación asimétrica moderna:** Además de RSA clásico (2048 y 4096 bits), la app soporta curvas elípticas estándar NIST: `secp256r1 (P-256)`, `secp384r1 (P-384)` y `secp521r1 (P-521)`.
+- **Parámetros de generación:** Se utiliza `KeyPairGenerator.getInstance("EC")` inicializado con `ECGenParameterSpec(curveName)` y `SecureRandom`.
+- **Firmas adaptativas:** El algoritmo de firma se selecciona según la curva: `SHA256withECDSA` para P-256, `SHA384withECDSA` para P-384 y `SHA512withECDSA` para P-521.
+- **Ventajas para el usuario móvil:** Las claves ECDSA de 256 bits proporcionan un nivel de seguridad equivalente a RSA 3072 bits con tamaños de clave minúsculos, lo que reduce radicalmente el consumo de batería y CPU durante la firma y verificación en teléfonos inteligentes.
+
+### 3. Estándar X.509 v3 Completo y Extensiones Canónicas (RFC 5280)
 - **Migración a X.509 v3 Oficial:** Los certificados emitidos son explícitamente versión 3 (`0x02`), satisfaciendo a herramientas de compilación (`apksigner`, `bundletool`) y analizadores de seguridad corporativos.
 - **Extensiones Integradas Obligatorias:**
   - `BasicConstraints(false)` con bandera crítica `isCritical = true`: Declara inequívocamente que el certificado corresponde a una entidad final y no a una CA emisora.
