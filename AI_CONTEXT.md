@@ -66,6 +66,22 @@ Keystore Creator es una aplicación nativa para Android cuyo objetivo es permiti
 - **Aviso Nativo In-App (No Toasts):** Cuando el usuario teclea su propia contraseña, el motor la audita al instante. Si se detecta un score bajo o patrones vulnerables, la interfaz despliega una tarjeta de aviso nativo explicando el riesgo y el tiempo estimado de descifrado, sin interrumpir ni bloquear al usuario de realizar su firma si así lo desea.
 - **Compatibilidad con scripts:** Se excluyen caracteres ambiguos o conflictivos en scripts bash/gradle como comillas dobles, comillas simples, backticks o barras invertidas (`"`, `'`, `` ` ``, `\`), asegurando que las contraseñas generadas puedan ser usadas sin escapar en `signingConfigs` de Gradle y en comandos de `apksigner`.
 
+### 8. Compresión Nativa y Exportación Granular (Storage Access Framework + ZIP All-in-One)
+- **Compresión Máxima sin Pérdidas:** `StorageCompressionHelper` utiliza `Deflater(Deflater.BEST_COMPRESSION)` nivel 9 y `GZIPOutputStream` con búferes de 8 KB estándar en el JDK de Android.
+  - Para artefactos de texto (Base64, Gradle, YAML, info), la tasa de compresión supera frecuentemente el 60-70%.
+  - Para el archivo binario del almacén PKCS12 / JKS, reduce cualquier redundancia interna sin alterar ni un solo bit tras la descompresión.
+- **Doble Vía de Salida (FileProvider vs SAF):**
+  - **FileProvider:** Empleado cuando el usuario pulsa "Compartir" para despachar el archivo a aplicaciones externas (Telegram, WhatsApp, Drive, Gmail) mediante `Intent.ACTION_SEND` con permisos temporales de lectura.
+  - **Storage Access Framework (SAF - `CreateDocument`):** Empleado cuando el usuario pulsa "Guardar en Móvil". Invoca el selector de almacenamiento nativo del sistema operativo Android, permitiéndole elegir libremente cualquier carpeta (Descargas, Documentos, tarjeta SD o carpetas de proyectos locales).
+- **Exportación Granular:** Cada artefacto (almacén, Base64, Gradle, Workflow y certificados X.509) cuenta con su propio lanzador SAF para ser exportado individualmente, o en bloque integral dentro del `.zip`.
+
+### 9. Restauración e Importación de Paquetes ZIP y Protección Anti Zip-Slip
+- **Mitigación Crítica Zip-Slip:** Los archivos ZIP procesados provienen del almacenamiento externo o de fuentes no confiables. `ZipImportHelper` valida que el `canonicalPath` de cada archivo extraído comience estrictamente con el `canonicalPath` del directorio sandbox temporal (`context.cacheDir/temp_zip_imports/`). Si una entrada contiene secuencias maliciosas de escape (ej. `../../`), el flujo la rechaza inmediatamente arrojando `SecurityException`.
+- **Heurística de Credenciales:** La app analiza en memoria si el paquete ZIP incluye `signingConfigs.gradle.kts` o `INFO_KEYSTORE.txt`. Mediante expresiones regulares seguras, extrae de forma automática `storePassword`, `keyPassword` y `keyAlias`, precargándolos en la interfaz para evitar tecleos complejos y propensos a error en pantallas móviles táctiles.
+- **Reconstrucción desde Base64:** Si el paquete ZIP carece de un archivo binario `.jks` o `.keystore` pero contiene una clave codificada en `.base64`, el motor la decodifica de forma segura y reconstruye el almacén binario en memoria.
+- **Validación Dual de Almacén (PKCS12 + JKS):** La validación de contraseñas intenta primero el estándar moderno `PKCS12` y, ante fallos, prueba el formato legado `JKS`, asegurando compatibilidad con almacenes antiguos exportados desde herramientas previas de PC.
+- **Persistencia Aislada:** El almacén se copia a `context.filesDir/keystores/` con verificación de no-colisión de nombres (agregando sufijos incrementales si ya existe un archivo con el mismo nombre) y las credenciales se cifran inmediatamente con **AES-256-GCM** mediante `SecureCredentialsCipher` antes de guardarse en Room.
+
 ---
 
 ## 🎨 Directrices de UI, Tipografía y Edge-to-Edge

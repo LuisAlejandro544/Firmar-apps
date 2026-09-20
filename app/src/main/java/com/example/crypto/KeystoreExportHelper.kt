@@ -317,4 +317,59 @@ object KeystoreExportHelper {
                   retention-days: 14
         """.trimIndent()
     }
+
+    /**
+     * Escribe el archivo binario de la Keystore (.jks o .keystore) directamente en un Uri destino
+     * seleccionado por el usuario mediante el Storage Access Framework (SAF) nativo de Android.
+     */
+    fun writeKeystoreToUri(context: Context, keystore: KeystoreEntity, destinationUri: Uri): Result<Unit> {
+        return runCatching {
+            val file = File(keystore.filePath)
+            if (!file.exists()) {
+                throw IllegalStateException("El archivo original no existe en ${keystore.filePath}")
+            }
+            context.contentResolver.openOutputStream(destinationUri)?.use { outputStream ->
+                file.inputStream().use { inputStream ->
+                    inputStream.copyTo(outputStream)
+                }
+                outputStream.flush()
+            } ?: throw IllegalStateException("No se pudo abrir el flujo de escritura para la URI seleccionada.")
+        }
+    }
+
+    /**
+     * Escribe la cadena Base64 generada directamente como archivo de texto (.base64) en un Uri destino
+     * mediante el Storage Access Framework (SAF).
+     */
+    fun writeBase64ToUri(context: Context, base64Text: String, destinationUri: Uri): Result<Unit> {
+        return StorageCompressionHelper.writeBytesToUri(
+            context = context,
+            destinationUri = destinationUri,
+            data = base64Text.toByteArray(Charsets.UTF_8)
+        )
+    }
+
+    /**
+     * Escribe el bloque de Gradle Kotlin DSL (.gradle.kts) directamente en un Uri destino con SAF.
+     */
+    fun writeGradleSnippetToUri(context: Context, keystore: KeystoreEntity, destinationUri: Uri): Result<Unit> {
+        val snippet = generateGradleKtsSnippet(keystore)
+        return StorageCompressionHelper.writeBytesToUri(
+            context = context,
+            destinationUri = destinationUri,
+            data = snippet.toByteArray(Charsets.UTF_8)
+        )
+    }
+
+    /**
+     * Escribe el archivo YAML del workflow de GitHub Actions (.yml) directamente en un Uri destino con SAF.
+     */
+    fun writeGitHubWorkflowToUri(context: Context, keystore: KeystoreEntity, destinationUri: Uri): Result<Unit> {
+        val workflow = generateFullGitHubActionWorkflow(keystore)
+        return StorageCompressionHelper.writeBytesToUri(
+            context = context,
+            destinationUri = destinationUri,
+            data = workflow.toByteArray(Charsets.UTF_8)
+        )
+    }
 }

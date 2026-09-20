@@ -32,7 +32,10 @@ app/src/main/
 │   │
 │   ├── crypto/                          # Motor Criptográfico y Utilidades
 │   │   ├── KeystoreGenerator.kt         # Generador de pares de claves RSA y certificados X.509
-│   │   ├── KeystoreExportHelper.kt      # Compartición mediante FileProvider, copias y snippets
+│   │   ├── KeystoreExportHelper.kt      # Compartición mediante FileProvider, copias, SAF y snippets
+│   │   ├── CertificateExportHelper.kt   # Extracción segura de certificados X.509 (.pem, .crt, .der)
+│   │   ├── StorageCompressionHelper.kt  # Motor de compresión Deflate/Gzip y empaquetador ZIP All-in-One
+│   │   ├── ZipImportHelper.kt           # Motor de importación, protección Zip-Slip, parser heurístico y validación
 │   │   ├── SecureCredentialsCipher.kt   # Cifrado AES-256-GCM respaldado por Android KeyStore (hardware TEE)
 │   │   └── PasswordSecurityEngine.kt    # Generador de contraseñas de alta entropía (16, 24, 32 caracteres)
 │   │
@@ -53,8 +56,11 @@ app/src/main/
 │       ├── generator/
 │       │   ├── GeneratorScreen.kt       # Formulario interactivo para crear nuevas keystores
 │       │   └── GeneratorViewModel.kt    # Validación de entradas y coordinación en segundo plano
+│       ├── importzip/
+│       │   ├── ZipImportScreen.kt       # Interfaz de restauración SAF, diagnóstico de ZIP y confirmación
+│       │   └── ZipImportViewModel.kt    # Máquina de estados de análisis, auto-rellenado y guardado en Room
 │       ├── list/
-│       │   ├── KeystoreListScreen.kt    # Listado con buscador, tarjetas informativas y estado vacío
+│       │   ├── KeystoreListScreen.kt    # Listado con buscador, acceso a importación ZIP y estado vacío
 │       │   └── KeystoreListViewModel.kt # Filtrado en tiempo real y confirmación de borrado
 │       ├── navigation/
 │       │   └── NavRoutes.kt             # Definición tipada de rutas y destinos de barra inferior
@@ -94,11 +100,15 @@ app/src/main/
 * **`PasswordSecurityEngine.kt`**: Motor de generación y auditoría de contraseñas de alta entropía asistido por `SecureRandom` y el analizador de algoritmos de diccionario `zxcvbn`. Ofrece 3 longitudes estándar (16, 24 y 32 caracteres) con distribución garantizada de mayúsculas, minúsculas, dígitos y símbolos no ambiguos (evitando caracteres conflictivos en compilaciones de Gradle y terminales), asegurando score 4/4 (indescifrables). Incluye auditoría en tiempo real para alertar de forma nativa en la UI si el usuario introduce contraseñas vulnerables a descifrado.
 * **`KeystoreExportHelper.kt`**: Proporciona métodos para:
   - Compartir de forma segura el archivo físico con otras aplicaciones (vía `FileProvider` con permisos `FLAG_GRANT_READ_URI_PERMISSION`).
-  - Convertir el archivo a texto **Base64** (`generateBase64`), compartirlo como texto plano o exportarlo como archivo `.base64`.
+  - Guardar directamente en el almacenamiento seleccionado por el usuario mediante el Storage Access Framework (SAF - `writeKeystoreToUri`, `writeBase64ToUri`, `writeGradleSnippetToUri`, `writeGitHubWorkflowToUri`).
+  - Convertir el archivo a texto **Base64** (`generateBase64`), compartirlo como texto plano, exportarlo como archivo `.base64` o escribirlo vía SAF.
   - Copiar textos al portapapeles suprimiendo la notificación nativa de Android 13+ con `ClipDescription.EXTRA_IS_SENSITIVE` para credenciales sensibles.
   - **Auto-limpieza a los 2 minutos:** Registra marcas distintivas en el `ClipData` y programa un `Handler` que a los 120 segundos inspecciona el portapapeles actual y **solo lo vacía si aún contiene el dato exacto copiado desde la app**, sin tocar contenido que el usuario haya copiado posteriormente en otras aplicaciones.
   - Generar el bloque de configuración `signingConfigs` para `build.gradle.kts` y el comando de `apksigner`.
   - **Generar Workflow Completo de GitHub Actions (`generateFullGitHubActionWorkflow`):** Pipeline preconfigurado de CI/CD para compilar y firmar APKs automáticamente con la clave seleccionada.
+* **`CertificateExportHelper.kt`**: Aísla criptográficamente el certificado público X.509 v3 desde el almacén PKCS12 / JKS omitiendo cualquier clave privada o credencial. Ofrece serialización en 3 formatos estándar (PEM con encabezados RFC 7468 a 64 columnas, binario CRT y binario nativo DER) con utilidades de compartición (`FileProvider`) y guardado directo (`Storage Access Framework`).
+* **`StorageCompressionHelper.kt`**: Motor de compresión y empaquetado ultra-eficiente que utiliza `Deflater` en nivel máximo (`BEST_COMPRESSION`), compresión `GZIP` y empaquetado multi-archivo `ZipOutputStream` con búferes optimizados de 8 KB. Genera el paquete integral All-in-One (`.zip`) conteniendo la keystore (.jks/.keystore), certificados (.pem, .crt), archivo Base64 (.base64), script CI/CD (.yml), bloque Gradle (.gradle.kts) y reporte de auditoría (`info.txt`). Incluye utilidades para compartir vía `FileProvider`, escribir directamente a URIs de SAF y computar porcentajes de ahorro de almacenamiento en disco en reposo.
+* **`ZipImportHelper.kt`**: Motor autónomo de extracción e inspección para paquetes ZIP y almacenes de claves. Implementa sandbox de descompresión segura en caché con verificación canónica contra vulnerabilidades Zip-Slip, detección heurística de artefactos (.jks, .keystore, .pem, .crt, .base64, gradle, yml), reconstrucción de almacenes a partir de cadenas Base64, parser automático de credenciales desde `signingConfigs.gradle.kts` o `INFO_KEYSTORE.txt`, validación criptográfica estricta con `java.security.KeyStore` (PKCS12 con fallback a JKS), extracción forense del certificado X.509 y cálculo de huellas digitales SHA-256 y SHA-1.
 
 ### 2. `data/`
 * **`KeystoreEntity.kt`**: Modela los datos de la keystore: ID, título, nombre de archivo, ruta absoluta, alias, contraseñas, algoritmo, tamaño en bytes, validez en años y huellas.
@@ -108,10 +118,15 @@ app/src/main/
 ### 3. `ui/`
 * **`MainActivity.kt`**: Contenedor principal con `NavHost`, `CenterAlignedTopAppBar` y `NavigationBar`. Implementa acondicionamiento quirúrgico de `contentWindowInsets` para que pantallas secundarias (`KeystoreDetailScreen`, `ColorPickerScreen`) gobiernen su propio `Scaffold` y `TopAppBar` pegados a la barra de estado, sin duplicación de insets ni espacios residuales.
 * **`GeneratorScreen.kt` & `GeneratorViewModel.kt`**: Pantalla de creación asistida con selector dual de formato (`.jks` / `.keystore`), autocompletado y sufijo inteligente de nombres de archivo, control deslizante continuo de validez (1 día a 100 años) con cálculo dinámico de caducidad y accesos rápidos, datos de prueba y validaciones.
-* **`KeystoreListScreen.kt` & `KeystoreListViewModel.kt`**: Lista de keystores con buscador en vivo y tarjeta con metadata esencial.
+* **`KeystoreListScreen.kt` & `KeystoreListViewModel.kt`**: Lista de keystores con buscador en vivo, acceso táctil a la restauración de paquetes ZIP y tarjeta con metadata esencial.
+* **`ZipImportScreen.kt` & `ZipImportViewModel.kt`**: Flujo completo de restauración e importación de paquetes ZIP y keystores externas. Integra selector de documentos SAF (`OpenDocument`), descompresión aislada con prevención anti Zip-Slip, resumen visual de los artefactos detectados en el ZIP con chips de colores, formulario con autocompletado inteligente de credenciales (extraídas de `signingConfigs` o `info.txt`), validación de clave privada con `KeyStore` nativo, extracción de huellas SHA-256 y guardado en Room con cifrado AES-256-GCM.
 * **`KeystoreDetailScreen.kt` & `KeystoreDetailViewModel.kt`**:
-  - Visualización completa de credenciales y copiado seguro.
-  - Tarjeta con Workflow completo de GitHub Actions CI/CD con botón de copiado en 1 toque.
+  - Visualización completa de credenciales y copiado seguro con auto-limpieza a los 2 minutos.
+  - **Paquete Completo Comprimido All-in-One (.zip):** Tarjeta dedicada con barra de progreso, generación de ZIP ultra-comprimido, opción de guardado nativo con Storage Access Framework (`CreateDocument`) y botón para compartir mediante `FileProvider`.
+  - **Exportación Individual SAF:** Botones dedicados para guardar en almacenamiento nativo el almacén (`.jks`/`.keystore`), la cadena Base64 (`.base64`), el bloque Gradle (`.gradle.kts`) y el pipeline CI/CD (`.yml`).
+  - **Telemetría de Compresión Deflate:** Visualización en tiempo real del tamaño en bytes original frente al tamaño con compresión máxima y porcentaje de reducción en disco.
+  - **Exportación de Certificados X.509:** Pestañas animadas para formatos PEM, CRT y DER con opciones de copia, compartición y descarga SAF.
+  - Tarjeta con Workflow completo de GitHub Actions CI/CD con selector de pestañas animadas (`SecondaryTabRow`).
   - Generación de Base64 con 1 solo clic para CI/CD con visor integrado y opciones de exportación.
   - Sistema de notificaciones in-app de seguridad (`SecurityNotificationBanner`) que advierte sobre los riesgos del portapapeles sin depender de toasts nativos de Android.
 * **`SettingsScreen.kt` & `ColorPickerScreen.kt` & `ThemeViewModel.kt`**:

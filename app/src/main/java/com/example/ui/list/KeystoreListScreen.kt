@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.FolderZip
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Share
@@ -42,6 +43,7 @@ import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.SuggestionChipDefaults
@@ -74,6 +76,7 @@ fun KeystoreListScreen(
     viewModel: KeystoreListViewModel,
     onNavigateToGenerator: () -> Unit,
     onNavigateToDetail: (Long) -> Unit,
+    onNavigateToZipImport: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -88,6 +91,7 @@ fun KeystoreListScreen(
             // Estado vacío: Sin keystores creadas aún
             EmptyKeystoresView(
                 onNavigateToGenerator = onNavigateToGenerator,
+                onNavigateToZipImport = onNavigateToZipImport,
                 modifier = Modifier.fillMaxSize()
             )
         } else {
@@ -96,28 +100,50 @@ fun KeystoreListScreen(
                     .fillMaxSize()
                     .padding(horizontal = 16.dp, vertical = 8.dp)
             ) {
-                // Barra de búsqueda rápida
-                OutlinedTextField(
-                    value = state.searchQuery,
-                    onValueChange = { viewModel.onSearchQueryChanged(it) },
+                // Fila con barra de búsqueda rápida y botón de restauración de ZIP
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(bottom = 12.dp)
-                        .testTag("search_keystores_input"),
-                    placeholder = { Text("Buscar por nombre, archivo o alias...") },
-                    leadingIcon = {
-                        Icon(Icons.Default.Search, contentDescription = null)
-                    },
-                    trailingIcon = {
-                        if (state.searchQuery.isNotEmpty()) {
-                            IconButton(onClick = { viewModel.onSearchQueryChanged("") }) {
-                                Icon(Icons.Default.Clear, contentDescription = "Limpiar búsqueda")
+                        .padding(bottom = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedTextField(
+                        value = state.searchQuery,
+                        onValueChange = { viewModel.onSearchQueryChanged(it) },
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag("search_keystores_input"),
+                        placeholder = { Text("Buscar por nombre, archivo o alias...") },
+                        leadingIcon = {
+                            Icon(Icons.Default.Search, contentDescription = null)
+                        },
+                        trailingIcon = {
+                            if (state.searchQuery.isNotEmpty()) {
+                                IconButton(onClick = { viewModel.onSearchQueryChanged("") }) {
+                                    Icon(Icons.Default.Clear, contentDescription = "Limpiar búsqueda")
+                                }
                             }
-                        }
-                    },
-                    singleLine = true,
-                    shape = RoundedCornerShape(12.dp)
-                )
+                        },
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp)
+                    )
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    FilledTonalIconButton(
+                        onClick = onNavigateToZipImport,
+                        modifier = Modifier
+                            .size(54.dp)
+                            .testTag("navigate_to_zip_import_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.FolderZip,
+                            contentDescription = "Restaurar paquete ZIP",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(26.dp)
+                        )
+                    }
+                }
 
                 if (state.keystores.isEmpty() && state.searchQuery.isNotBlank()) {
                     Box(
@@ -350,6 +376,7 @@ private fun KeystoreItemCard(
 @Composable
 private fun EmptyKeystoresView(
     onNavigateToGenerator: () -> Unit,
+    onNavigateToZipImport: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -385,7 +412,7 @@ private fun EmptyKeystoresView(
         Spacer(modifier = Modifier.height(8.dp))
 
         Text(
-            text = "Crea tu primer almacén de claves para firmar tus aplicaciones Android con seguridad.",
+            text = "Crea tu primer almacén de claves para firmar tus aplicaciones Android con seguridad, o restaura una copia de seguridad en formato .zip.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = androidx.compose.ui.text.style.TextAlign.Center
@@ -401,6 +428,18 @@ private fun EmptyKeystoresView(
             Icon(Icons.Default.Add, contentDescription = null)
             Spacer(modifier = Modifier.width(8.dp))
             Text("Crear mi primera Keystore")
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        OutlinedButton(
+            onClick = onNavigateToZipImport,
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.testTag("empty_state_import_zip_button")
+        ) {
+            Icon(Icons.Default.FolderZip, contentDescription = null)
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("Restaurar desde paquete .ZIP")
         }
     }
 }

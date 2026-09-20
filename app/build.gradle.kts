@@ -1,4 +1,5 @@
 import com.google.gms.googleservices.GoogleServicesPlugin.MissingGoogleServicesStrategy
+import java.io.File
 
 plugins {
   alias(libs.plugins.android.application)
@@ -68,6 +69,30 @@ android {
   dependenciesInfo {
     includeInApk = false
     includeInBundle = true
+  }
+}
+
+@org.gradle.api.tasks.UntrackedTask(because = "Copies universal debug apk to app-debug.apk for AI Studio emulator preview")
+abstract class CopyUniversalApkTask : DefaultTask() {
+  @get:javax.inject.Inject
+  abstract val layout: org.gradle.api.file.ProjectLayout
+
+  @org.gradle.api.tasks.TaskAction
+  fun copyApk() {
+    val dir = layout.buildDirectory.dir("outputs/apk/debug").get().asFile
+    val universalApk = File(dir, "app-universal-debug.apk")
+    val defaultApk = File(dir, "app-debug.apk")
+    if (universalApk.exists()) {
+      universalApk.copyTo(defaultApk, overwrite = true)
+    }
+  }
+}
+
+val copyUniversalApk = tasks.register<CopyUniversalApkTask>("copyUniversalApk")
+
+tasks.configureEach {
+  if (name == "assembleDebug") {
+    finalizedBy(copyUniversalApk)
   }
 }
 

@@ -46,6 +46,7 @@ object AppRoutes {
     const val KEYSTORE_DETAIL = "keystore_detail/{keystoreId}"
     const val SETTINGS = "settings"
     const val COLOR_THEME = "settings_color_theme"
+    const val ZIP_IMPORT = "zip_import"
 
     fun createDetailRoute(keystoreId: Long): String = "keystore_detail/$keystoreId"
 

@@ -49,6 +49,30 @@ Una aplicación móvil moderna desarrollada en **Kotlin** y **Jetpack Compose** 
       - **CRT (`.crt`):** Certificado binario estándar universalmente reconocido por sistemas operativos y servidores web.
       - **DER (`.der`):** Codificación binaria ASN.1 / DER nativa para herramientas de línea de comandos e integraciones de bajo nivel.
     - **Integración con Almacenamiento Móvil (SAF & FileProvider):** Posibilidad de compartir el archivo a través de cualquier app (Drive, Telegram, WhatsApp, Gmail) o guardarlo directamente en el almacenamiento interno del dispositivo usando el selector de archivos del sistema.
+  - **Paquete Completo Comprimido All-in-One (`.zip` Ultra-Comprimido con Deflate Nivel 9):**
+    - **Respaldo Integral en 1 Clic:** Empaquetado completo de todos los artefactos de la firma en un único archivo comprimido: almacén original (`.jks` / `.keystore`), certificados públicos (`.pem` y `.crt`), cadena Base64 (`.base64`), pipeline CI/CD (`build-and-sign.yml`), bloque de compilación Gradle (`signingConfigs.gradle.kts`) y reporte informativo de auditoría (`info.txt`).
+    - **Compresión Máxima sin Pérdidas:** Motor de compresión `Deflater(Deflater.BEST_COMPRESSION)` y `ZipOutputStream` con búferes de 8 KB que reducen drásticamente el peso de los artefactos de texto y firmas digitales.
+    - **Doble Vía de Exportación:** Opciones de "Guardar .zip en Móvil" mediante el Storage Access Framework (SAF) nativo de Android y "Compartir .zip" mediante `FileProvider` hacia nubes o apps de mensajería.
+  - **Restauración e Importación de Paquetes ZIP y Keystores Externas:**
+    - **Pantalla Dedicada e Intuitiva:** Flujo táctil autónomo (`ZipImportScreen`) accesible desde el buscador de la biblioteca o desde el estado vacío inicial.
+    - **Selector Seguro sin Permisos (SAF):** Utiliza el contrato nativo `OpenDocument` para acceder a archivos ZIP en cualquier directorio del dispositivo (Descargas, Drive, tarjeta SD) sin solicitar permisos intrusivos.
+    - **Protección Criptográfica contra Vulnerabilidad Zip Slip:** Descompresión en sandbox temporal de la caché validando canónicamente que ninguna entrada se desvíe fuera de la ruta autorizada.
+    - **Detección Inteligente de Componentes:** Reconocimiento heurístico de almacenes `.jks` / `.keystore`, certificados X.509, configuraciones de Gradle y workflows de CI/CD.
+    - **Reconstrucción Automática desde Base64:** Si el archivo comprimido carece de binario `.jks` directo pero incluye un archivo `.base64`, el motor lo decodifica y reconstruye el almacén de claves en caliente.
+    - **Auto-rellenado de Credenciales:** Si el paquete ZIP contiene `signingConfigs.gradle.kts` o `INFO_KEYSTORE.txt`, se extraen y precargan automáticamente el alias y las contraseñas para minimizar el tecleo en pantallas móviles.
+    - **Validación Criptográfica Estricta:** Comprobación real de las contraseñas del almacén y de la clave privada contra la implementación nativa de `KeyStore` (PKCS12 con fallback a JKS).
+    - **Auditoría Forense en Tiempo Real:** Inspección del certificado X.509, extracción de titular (CN, O, OU, C), comprobación de caducidad y cálculo exacto de huellas SHA-256 y SHA-1.
+    - **Persistencia Segura en Room con Cifrado AES-256-GCM:** Almacenamiento físico en la memoria interna de la aplicación con prevención de colisiones de nombres y cifrado de contraseñas con la clave maestra en el hardware seguro del teléfono.
+  - **Exportación Individual con Storage Access Framework (SAF - `CreateDocument`):**
+    - Libertad total para que el usuario guarde individualmente cualquier artefacto en la carpeta que elija de su memoria interna, tarjeta SD o carpetas del sistema:
+      - Almacén de claves (`.jks` / `.keystore`)
+      - Archivo Base64 (`.base64`)
+      - Bloque Gradle (`signingConfigs.gradle.kts`)
+      - Workflow de GitHub Actions (`build-and-sign.yml`)
+      - Certificados X.509 (`.pem`, `.crt`, `.der`)
+    - Cero permisos peligrosos requeridos: integración con el selector de documentos nativo de Android.
+  - **Optimización y Telemetría de Compresión en Disco:**
+    - Medición en tiempo real del tamaño original frente al tamaño con compresión Deflate máxima mostrada en la tarjeta de información del archivo en la pantalla de detalle (ahorros típicos del 50% al 70%).
   - **Privacidad, Auto-limpieza en 2 Minutos y Notificaciones In-App:**
     - Al copiar contraseñas o la clave Base64, se suprime la notificación nativa predeterminada de Android (`EXTRA_IS_SENSITIVE`) y se muestra un banner in-app exclusivo con diseño Material Design 3.
     - **Limpieza Automática a los 2 Minutos (Estricta):** Al copiar datos desde la app, se inicia un temporizador de 2 minutos (120 s). Al cumplirse el tiempo, el portapapeles se limpia automáticamente **únicamente si aún contiene el dato exacto copiado de nuestra app**. Si el usuario copió texto de otra aplicación (WhatsApp, navegador, etc.), no se borra, garantizando no interferir con otras actividades del usuario.
@@ -119,6 +143,9 @@ Una aplicación móvil moderna desarrollada en **Kotlin** y **Jetpack Compose** 
 | **Criptografía X.509/PKCS12** | Bouncy Castle (`bcprov-jdk18on`, `bcpkix-jdk18on`) + Conscrypt Android |
 | **Navegación** | Navigation Compose |
 | **Compartición de Archivos** | AndroidX FileProvider |
+| **Exportación a Almacenamiento** | Android Storage Access Framework (SAF - `CreateDocument`) |
+| **Importación y Restauración** | SAF (`OpenDocument`) + Anti Zip-Slip + Parser Heurístico de Credenciales |
+| **Compresión y Empaquetado** | Deflater (Nivel 9 Ultra-Compress) + GZIP + ZipOutputStream |
 
 ---
 
@@ -136,5 +163,7 @@ Una aplicación móvil moderna desarrollada en **Kotlin** y **Jetpack Compose** 
 1. Abre la aplicación en el emulador o instálala en tu dispositivo Android.
 2. En la pestaña **Generador**, pulsa el botón *"Datos de prueba"* para autocompletar las credenciales o escribe las tuyas propias.
 3. Presiona **Generar Keystore**. En pocos segundos se creará el par de claves RSA y el certificado autofirmado.
-4. En el diálogo de confirmación, pulsa **Ver Detalles** para revisar las huellas SHA-256/SHA-1 y el código de Gradle, o **Compartir** para exportar el archivo físico `.jks`.
+4. En el diálogo de confirmación, pulsa **Ver Detalles** para revisar las huellas SHA-256/SHA-1 y el código de Gradle, o **Compartir** para exportar el archivo físico `.jks` o el `.zip` completo.
+5. En la pestaña **Mis Keystores**, pulsa el botón de archivo comprimido junto a la barra de búsqueda (o en el estado inicial) para acceder a **Restaurar Paquete ZIP**.
+6. Selecciona el archivo `.zip` de respaldo; la aplicación analizará los artefactos, precargará las contraseñas detectadas y al tocar **Validar e Importar** auditará el certificado incorporándolo a tu biblioteca local protegida con AES-256-GCM.
 5. En la pestaña **Mis Keystores**, consulta y administra todos los almacenes generados con el buscador.

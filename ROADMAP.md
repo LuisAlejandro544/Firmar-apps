@@ -6,12 +6,11 @@ Este documento define el plan de evolución y las próximas funcionalidades de l
 
 ## 🎯 Próximo Paso Prioritario (Siguiente Implementación)
 
-### 📌 Importador e Inspector de Keystores Externas (Fase 3)
-* **Objetivo:** Permitir al usuario seleccionar e importar archivos `.jks` o `.keystore` ya existentes en su dispositivo móvil para inspeccionar sus alias, validar contraseñas, extraer huellas SHA-1 / SHA-256 y convertirlas a Base64.
+### 📌 Firma Móvil de APKs y Zipalign Integrado (Fase 7)
+* **Objetivo:** Permitir al usuario seleccionar un APK o AAB generado en su teléfono y firmarlo directamente utilizando cualquiera de las keystores guardadas en la biblioteca local mediante APK Signature Scheme v1, v2 y v3 con alineación `zipalign`.
 * **Casos de uso clave:**
-  - **Inspección sin PC:** Verificar qué claves contiene una keystore antigua sin necesidad de ejecutar `keytool` en una terminal de ordenador.
-  - **Validación de credenciales:** Probar si una contraseña coincide antes de compilar o firmar un APK.
-  - **Conversión de almacenes antiguos a Base64:** Permitir codificar keystores previas para pipelines de CI/CD modernos.
+  - **Firma autónoma sin PC:** Firmar APKs de depuración o producción directamente desde la memoria del teléfono.
+  - **Distribución en tiendas alternativas:** Generar binarios listos para Uptodown, GitHub Releases o F-Droid sin necesidad de terminales o emuladores de escritorio.
 
 ---
 
@@ -141,13 +140,50 @@ Este documento define el plan de evolución y las próximas funcionalidades de l
 
 ---
 
-### ⏳ Fase 6: Importador e Inspector de Keystores Externas (Próximo Sprint)
-- [ ] Selector de archivos para importar keystores existentes desde el almacenamiento del teléfono.
-- [ ] Extracción y visualización de certificados, alias y huellas de archivos externos.
-- [ ] Verificación de contraseñas de almacén y de clave para keystores importadas.
+### ✅ Fase 5.5: Paquete All-in-One Ultra-Comprimido (.zip) y Exportación Granular SAF (Completada)
+- [x] **Motor de Compresión Nativo Máximo (`StorageCompressionHelper`):**
+  - [x] Algoritmo `Deflater(Deflater.BEST_COMPRESSION)` nivel 9 sin dependencias externas pesadas.
+  - [x] Compresión de cadenas de texto y metadatos con `GZIPOutputStream`.
+  - [x] Empaquetador multi-archivo `ZipOutputStream` con búferes de 8 KB para evitar saturación de memoria en dispositivos de gama media/baja.
+  - [x] Telemetría de optimización en disco: cálculo byte a byte y porcentaje de ahorro visualizado en la pantalla de detalle.
+- [x] **Paquete Completo All-in-One (.zip):**
+  - [x] Empaquetado automático en 1 solo archivo que incluye: almacén (`.jks`/`.keystore`), certificados (`.pem`, `.crt`), Base64 (`.base64`), pipeline CI/CD (`build-and-sign.yml`), configuración Gradle (`signingConfigs.gradle.kts`) y reporte informativo (`info.txt`).
+  - [x] Exportación directa a cualquier carpeta del dispositivo vía Storage Access Framework (`CreateDocument`).
+  - [x] Compartición directa mediante `FileProvider` a mensajería, nube o administradores de archivos móviles (MT Manager, Drive, Telegram).
+- [x] **Exportación Individual con Storage Access Framework (SAF):**
+  - [x] Guardado individual del almacén original (`.jks` / `.keystore`) en la ubicación que el usuario elija.
+  - [x] Guardado individual de la cadena codificada (`.base64`).
+  - [x] Guardado individual del fragmento Gradle (`signingConfigs.gradle.kts`).
+  - [x] Guardado individual del pipeline CI/CD (`build-and-sign.yml`).
+  - [x] Guardado individual de certificados X.509 (`.pem`, `.crt`, `.der`).
 
 ---
 
-### 🔮 Fase 7: Firma Móvil de APKs
-- [ ] Herramienta para seleccionar un APK no firmado en el dispositivo y firmarlo con una de las keystores guardadas mediante v1, v2 y v3 scheme.
-- [ ] Alineación con `zipalign` integrada.
+### ✅ Fase 6: Importador y Restaurador de Paquetes ZIP Completos (Completada)
+- [x] **Motor Autónomo de Importación (`ZipImportHelper`):**
+  - [x] Extracción segura en sandbox temporal (`cacheDir/temp_zip_imports/`) con prevención de la vulnerabilidad Zip Slip (validación estricta de rutas canónicas).
+  - [x] Detección inteligente de archivos `.jks` / `.keystore`, certificados X.509 (`.pem`/`.crt`), cadenas Base64 (`.base64`), configuración de Gradle (`signingConfigs.gradle.kts`) y workflows CI/CD.
+  - [x] Reconstrucción en caliente de keystores a partir de archivos `.base64` en paquetes ZIP que no incluyan el binario directo.
+  - [x] Parser heurístico de credenciales: extracción automática de `storePassword`, `keyPassword` y `keyAlias` desde archivos `signingConfigs.gradle.kts` o `INFO_KEYSTORE.txt` preexistentes en el ZIP para evitar tecleo manual en móvil.
+  - [x] Validación criptográfica estricta con `java.security.KeyStore` (formato PKCS12 con fallback automático a JKS clásico) probando ambas contraseñas contra la clave privada.
+  - [x] Auditoría forense instantánea del certificado X.509: extracción de titular (CN, O, OU, C), fechas de validez y cálculo de huellas digitales SHA-256 y SHA-1.
+  - [x] Prevención de colisiones en disco con renombrado automático no destructivo (`mi_llave_imported.jks`).
+  - [x] Persistencia reactiva en Room con cifrado fuerte de contraseñas mediante **AES-256-GCM** y clave en hardware TEE/StrongBox.
+- [x] **Arquitectura y Capa de Presentación (`ZipImportViewModel` + `ZipImportScreen`):**
+  - [x] Interfaz Material Design 3 con tarjetas informativas y badges de estado para cada artefacto detectado dentro del archivo comprimido.
+  - [x] Selector nativo de documentos Storage Access Framework (`ActivityResultContracts.OpenDocument()`) sin requerir permisos peligrosos de almacenamiento.
+  - [x] Formulario editable de credenciales con visores de contraseña y autocompletado si los datos fueron extraídos del ZIP.
+  - [x] Panel de verificación con huellas digitales SHA-256 y botón táctil de confirmación "Validar e Importar".
+- [x] **Puntos de Entrada y Navegación:**
+  - [x] Botón directo de restauración con icono de ZIP en la barra de búsqueda de la lista de almacenes (`KeystoreListScreen`).
+  - [x] Botón de acción en el estado vacío cuando la biblioteca aún no tiene almacenes creados.
+  - [x] Registro en `NavRoutes.kt` y `MainActivity.kt` con animación de entrada y gestión limpia de insets edge-to-edge.
+- [x] **Pruebas Unitarias Automatizadas:** Pruebas en `CryptoSecurityUnitTest` validando descompresión, inspección de metadatos y rechazo estricto ante contraseñas incorrectas.
+
+---
+
+### 🔮 Fase 7: Firma Móvil de APKs y Zipalign Integrado (Próximo Sprint)
+- [ ] Herramienta para seleccionar un APK o AAB no firmado en el almacenamiento del dispositivo.
+- [ ] Firma digital móvil con APK Signature Scheme v1 (Jar Signature), v2 (APK Signing Block) y v3.
+- [ ] Alineación de 4 bytes (`zipalign`) integrada antes o durante el proceso de firma.
+- [ ] Comprobación de firma e integridad de paquetes APK directamente en el teléfono.

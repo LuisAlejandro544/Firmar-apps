@@ -148,4 +148,60 @@ class CryptoSecurityUnitTest {
         assertEquals("test_alias_cert.crt", CertificateExportHelper.getSuggestedFileName(keystoreEntity, CertificateFormat.CRT))
         assertEquals("test_alias_cert.der", CertificateExportHelper.getSuggestedFileName(keystoreEntity, CertificateFormat.DER))
     }
+
+    @Test
+    fun `zip import helper validates keystore and extracts metadata correctly`() = runBlocking {
+        val context: Context = ApplicationProvider.getApplicationContext()
+        val params = KeystoreParams(
+            title = "Import Test Keystore",
+            fileName = "import_test.jks",
+            alias = "my_import_alias",
+            storePassword = "StorePassword#2026",
+            keyPassword = "KeyPassword#2026",
+            keySize = 2048,
+            validityYears = 20,
+            commonName = "Imported Developer",
+            organization = "Imported Org",
+            countryCode = "ES"
+        )
+
+        val keystoreEntity = KeystoreGenerator.generateKeystore(context, params).getOrThrow()
+        val jksFile = java.io.File(keystoreEntity.filePath)
+        assertTrue(jksFile.exists())
+
+        // 1. Validación exitosa con credenciales correctas
+        val validationResult = com.example.crypto.ZipImportHelper.validateAndInspectKeystore(
+            jksFile = jksFile,
+            storePassword = "StorePassword#2026",
+            alias = "my_import_alias",
+            keyPassword = "KeyPassword#2026"
+        )
+        assertTrue("La validación de la keystore debe ser exitosa", validationResult.isSuccess)
+        val validation = validationResult.getOrThrow()
+        assertEquals("my_import_alias", validation.validatedAlias)
+        assertEquals("Imported Developer", validation.commonName)
+        assertEquals("Imported Org", validation.organization)
+        assertEquals("ES", validation.countryCode)
+        assertTrue("SHA-256 debe estar calculado", validation.sha256Fingerprint.isNotEmpty())
+        assertTrue("SHA-1 debe estar calculado", validation.sha1Fingerprint.isNotEmpty())
+        assertEquals(keystoreEntity.sha256Fingerprint, validation.sha256Fingerprint)
+
+        // 2. Rechazo con contraseña errónea del almacén
+        val wrongStorePassResult = com.example.crypto.ZipImportHelper.validateAndInspectKeystore(
+            jksFile = jksFile,
+            storePassword = "WrongPassword#999",
+            alias = "my_import_alias",
+            keyPassword = "KeyPassword#2026"
+        )
+        assertTrue("Debe fallar con contraseña de almacén incorrecta", wrongStorePassResult.isFailure)
+
+        // 3. Rechazo con contraseña errónea de la clave privada
+        val wrongKeyPassResult = com.example.crypto.ZipImportHelper.validateAndInspectKeystore(
+            jksFile = jksFile,
+            storePassword = "StorePassword#2026",
+            alias = "my_import_alias",
+            keyPassword = "WrongKeyPass#999"
+        )
+        assertTrue("Debe fallar con contraseña de clave incorrecta", wrongKeyPassResult.isFailure)
+    }
 }

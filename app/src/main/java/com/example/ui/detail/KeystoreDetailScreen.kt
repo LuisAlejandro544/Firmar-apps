@@ -31,6 +31,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Code
@@ -125,6 +126,11 @@ fun KeystoreDetailScreen(
     val certError by viewModel.certError.collectAsStateWithLifecycle()
     val selectedCertFormat by viewModel.selectedCertFormat.collectAsStateWithLifecycle()
 
+    // Estados para compresión y paquete completo (.zip)
+    val isPackagingZip by viewModel.isPackagingZip.collectAsStateWithLifecycle()
+    val zipBundleError by viewModel.zipBundleError.collectAsStateWithLifecycle()
+    val compressionStats by viewModel.compressionStats.collectAsStateWithLifecycle()
+
     val context = LocalContext.current
     var showDeleteConfirm by remember { mutableStateOf(false) }
     // Estado para la navegación por pestañas del bloque de códigos de integración (0 = Gradle, 1 = CI/CD)
@@ -136,6 +142,51 @@ fun KeystoreDetailScreen(
     ) { uri ->
         if (uri != null) {
             viewModel.saveCertificateToUri(context, uri, selectedCertFormat)
+        }
+    }
+
+    // Launcher SAF para el paquete All-in-One comprimido (.zip)
+    val saveZipBundleLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/zip")
+    ) { uri ->
+        if (uri != null) {
+            viewModel.saveZipBundleToUri(context, uri)
+        }
+    }
+
+    // Launcher SAF para la keystore física (.jks / .keystore) individual
+    val saveKeystoreLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/octet-stream")
+    ) { uri ->
+        if (uri != null) {
+            viewModel.saveKeystoreToUri(context, uri)
+        }
+    }
+
+    // Launcher SAF para el archivo Base64 individual (.base64)
+    val saveBase64Launcher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("text/plain")
+    ) { uri ->
+        if (uri != null) {
+            viewModel.saveBase64ToUri(context, uri)
+        }
+    }
+
+    // Launcher SAF para el fragmento de Gradle Kotlin DSL (.gradle.kts)
+    val saveGradleLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("text/plain")
+    ) { uri ->
+        if (uri != null) {
+            viewModel.saveGradleSnippetToUri(context, uri)
+        }
+    }
+
+    // Launcher SAF para el archivo YAML de GitHub Actions (.yml)
+    val saveWorkflowLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("text/plain")
+    ) { uri ->
+        if (uri != null) {
+            viewModel.saveGitHubWorkflowToUri(context, uri)
         }
     }
 
@@ -238,6 +289,9 @@ fun KeystoreDetailScreen(
                             DetailItemRow(label = "Fecha de generación", value = formattedDate)
                             DetailItemRow(label = "Algoritmo y tamaño", value = currentKeystore.keyAlgorithm)
                             DetailItemRow(label = "Validez", value = "${currentKeystore.validityYears} años")
+                            if (compressionStats != null) {
+                                DetailItemRow(label = "Optimización Deflate", value = compressionStats!!)
+                            }
                             DetailItemRow(label = "Ruta interna", value = currentKeystore.filePath) {
                                 viewModel.copyNonSensitiveValue(context, "Ruta de archivo", currentKeystore.filePath)
                             }
@@ -467,8 +521,20 @@ fun KeystoreDetailScreen(
                                     ) {
                                         Icon(Icons.Default.Description, contentDescription = null, modifier = Modifier.size(16.dp))
                                         Spacer(modifier = Modifier.width(6.dp))
-                                        Text("Archivo .base64", fontSize = 13.sp)
+                                        Text("Compartir .base64", fontSize = 12.sp)
                                     }
+                                }
+
+                                // Botón para guardar individualmente el archivo Base64 con SAF
+                                OutlinedButton(
+                                    onClick = {
+                                        saveBase64Launcher.launch(viewModel.getSuggestedBase64FileName())
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Icon(Icons.Default.FileDownload, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Guardar Archivo .base64 en Móvil", fontSize = 13.sp)
                                 }
                             }
                         }
@@ -932,6 +998,17 @@ fun KeystoreDetailScreen(
                                             Spacer(modifier = Modifier.width(8.dp))
                                             Text("Copiar Configuración de Gradle")
                                         }
+
+                                        OutlinedButton(
+                                            onClick = {
+                                                saveGradleLauncher.launch(viewModel.getSuggestedGradleFileName())
+                                            },
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Icon(Icons.Default.FileDownload, contentDescription = null, modifier = Modifier.size(16.dp))
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text("Guardar signingConfigs.gradle.kts en Móvil")
+                                        }
                                     }
                                 } else {
                                     // Pestaña 1: Workflow para GitHub Actions CI/CD
@@ -977,24 +1054,159 @@ fun KeystoreDetailScreen(
                                             Spacer(modifier = Modifier.width(8.dp))
                                             Text("Copiar Workflow Completo de GitHub Actions")
                                         }
+
+                                        OutlinedButton(
+                                            onClick = {
+                                                saveWorkflowLauncher.launch(viewModel.getSuggestedWorkflowFileName())
+                                            },
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Icon(Icons.Default.FileDownload, contentDescription = null, modifier = Modifier.size(16.dp))
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text("Guardar build-and-sign.yml en Móvil")
+                                        }
                                     }
                                 }
                             }
                         }
                     }
 
-                    // Botones de acción principales
-                    FilledTonalButton(
-                        onClick = { KeystoreExportHelper.shareKeystoreFile(context, currentKeystore) },
+                    // Tarjeta de Exportación Completa: Paquete All-in-One Comprimido (.zip)
+                    Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(50.dp)
-                            .testTag("share_file_button"),
-                        shape = RoundedCornerShape(12.dp)
+                            .testTag("zip_bundle_export_card"),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
+                        ),
+                        border = androidx.compose.foundation.BorderStroke(
+                            width = 1.dp,
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)
+                        ),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                     ) {
-                        Icon(Icons.Default.Share, contentDescription = null)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Compartir o Exportar Archivo (${currentKeystore.fileName})")
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Archive,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                                Column {
+                                    Text(
+                                        text = "Paquete Completo Comprimido (.zip)",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Text(
+                                        text = "Respaldo todo en uno con compresión ultra-alta",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+
+                            Text(
+                                text = "Empaqueta la llave original (.jks), certificados (.pem y .crt), cadena Base64 (.base64), script de GitHub Actions, configuración de Gradle y reporte en un solo archivo .zip optimizado al máximo. Puedes guardarlo en cualquier carpeta de tu dispositivo o en la nube.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+
+                            if (isPackagingZip) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.Center,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Text(
+                                        text = "Comprimiendo y empaquetando archivos...",
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+                                }
+                            }
+
+                            if (zipBundleError != null) {
+                                Text(
+                                    text = zipBundleError!!,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                            }
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                OutlinedButton(
+                                    onClick = {
+                                        viewModel.shareZipBundle(context)
+                                    },
+                                    enabled = !isPackagingZip,
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Compartir .zip", fontSize = 13.sp)
+                                }
+
+                                Button(
+                                    onClick = {
+                                        saveZipBundleLauncher.launch(viewModel.getSuggestedZipFileName())
+                                    },
+                                    enabled = !isPackagingZip,
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Icon(Icons.Default.FileDownload, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Guardar .zip", fontSize = 13.sp)
+                                }
+                            }
+                        }
+                    }
+
+                    // Botones de acción principales para la Keystore original (.jks)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        FilledTonalButton(
+                            onClick = { KeystoreExportHelper.shareKeystoreFile(context, currentKeystore) },
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(50.dp)
+                                .testTag("share_file_button"),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Compartir Llave", fontSize = 13.sp)
+                        }
+
+                        Button(
+                            onClick = {
+                                saveKeystoreLauncher.launch(currentKeystore.fileName)
+                            },
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(50.dp)
+                                .testTag("save_keystore_saf_button"),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Icon(Icons.Default.FileDownload, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Guardar .jks", fontSize = 13.sp)
+                        }
                     }
 
                     OutlinedButton(

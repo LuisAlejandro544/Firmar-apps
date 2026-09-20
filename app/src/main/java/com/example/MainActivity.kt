@@ -52,6 +52,8 @@ import com.example.ui.generator.GeneratorScreen
 import com.example.ui.generator.GeneratorViewModel
 import com.example.ui.list.KeystoreListScreen
 import com.example.ui.list.KeystoreListViewModel
+import com.example.ui.importzip.ZipImportScreen
+import com.example.ui.importzip.ZipImportViewModel
 import com.example.ui.navigation.AppRoutes
 import com.example.ui.navigation.NavDestination
 import com.example.ui.settings.ColorPickerScreen
@@ -94,7 +96,9 @@ fun KeystoreApp(themeViewModel: ThemeViewModel) {
     val currentRoute = navBackStackEntry?.destination?.route
 
     // Ocultar la barra inferior y top app bar general en pantallas secundarias/hijas
-    val isChildScreen = currentRoute?.startsWith("keystore_detail") == true || currentRoute == AppRoutes.COLOR_THEME
+    val isChildScreen = currentRoute?.startsWith("keystore_detail") == true ||
+        currentRoute == AppRoutes.COLOR_THEME ||
+        currentRoute == AppRoutes.ZIP_IMPORT
 
     val destinations = listOf(
         NavDestination.Generator,
@@ -284,6 +288,9 @@ fun KeystoreApp(themeViewModel: ThemeViewModel) {
                         },
                         onNavigateToDetail = { keystoreId ->
                             navController.navigate(AppRoutes.createDetailRoute(keystoreId))
+                        },
+                        onNavigateToZipImport = {
+                            navController.navigate(AppRoutes.ZIP_IMPORT)
                         }
                     )
                 }
@@ -386,6 +393,42 @@ fun KeystoreApp(themeViewModel: ThemeViewModel) {
                     ColorPickerScreen(
                         themeViewModel = themeViewModel,
                         onBack = { navController.popBackStack() }
+                    )
+                }
+
+                // Pantalla 6: Importación y Restauración de Paquete ZIP (Pantalla de Profundidad)
+                composable(
+                    route = AppRoutes.ZIP_IMPORT,
+                    enterTransition = {
+                        slideInHorizontally(
+                            animationSpec = tween(350, easing = FastOutSlowInEasing),
+                            initialOffsetX = { it }
+                        ) + fadeIn(animationSpec = tween(300))
+                    },
+                    exitTransition = {
+                        fadeOut(animationSpec = tween(200))
+                    },
+                    popExitTransition = {
+                        slideOutHorizontally(
+                            animationSpec = tween(300, easing = FastOutSlowInEasing),
+                            targetOffsetX = { it }
+                        ) + fadeOut(animationSpec = tween(250))
+                    }
+                ) {
+                    val zipImportViewModel: ZipImportViewModel = viewModel()
+                    ZipImportScreen(
+                        viewModel = zipImportViewModel,
+                        onBack = { navController.popBackStack() },
+                        onNavigateToDetail = { keystoreId ->
+                            navController.navigate(AppRoutes.createDetailRoute(keystoreId)) {
+                                popUpTo(AppRoutes.KEYSTORE_LIST)
+                            }
+                        },
+                        onNavigateToList = {
+                            navController.navigate(AppRoutes.KEYSTORE_LIST) {
+                                popUpTo(AppRoutes.KEYSTORE_LIST) { inclusive = true }
+                            }
+                        }
                     )
                 }
             }

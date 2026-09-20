@@ -1,6 +1,6 @@
 {
   "name": "Keystore Creator",
-  "description": "Generador y gestor de keystores para Android con almacenamiento local y exportación de certificados.",
+  "description": "Generador, gestor, importador y restaurador de keystores (.jks/.keystore/.zip) para Android con cifrado AES-256-GCM y exportación de certificados.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.crypto.CertificateExportHelper
 import com.example.crypto.CertificateFormat
 import com.example.crypto.KeystoreExportHelper
+import com.example.crypto.StorageCompressionHelper
 import com.example.data.database.AppDatabase
 import com.example.data.model.KeystoreEntity
 import com.example.data.repository.KeystoreRepository
@@ -17,6 +18,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
 
 /**
  * Modelo de datos para alertas y avisos in-app de seguridad de la aplicación.
@@ -74,6 +76,20 @@ class KeystoreDetailViewModel(application: Application) : AndroidViewModel(appli
     private val _selectedCertFormat = MutableStateFlow(CertificateFormat.PEM)
     val selectedCertFormat: StateFlow<CertificateFormat> = _selectedCertFormat.asStateFlow()
 
+    // Estados para el paquete completo comprimido All-in-One (.zip)
+    private val _isPackagingZip = MutableStateFlow(false)
+    val isPackagingZip: StateFlow<Boolean> = _isPackagingZip.asStateFlow()
+
+    private val _zipBundleBytes = MutableStateFlow<ByteArray?>(null)
+    val zipBundleBytes: StateFlow<ByteArray?> = _zipBundleBytes.asStateFlow()
+
+    private val _zipBundleError = MutableStateFlow<String?>(null)
+    val zipBundleError: StateFlow<String?> = _zipBundleError.asStateFlow()
+
+    // Estadísticas de compresión interna y ahorro de espacio en reposo
+    private val _compressionStats = MutableStateFlow<String?>(null)
+    val compressionStats: StateFlow<String?> = _compressionStats.asStateFlow()
+
     init {
         val database = AppDatabase.getDatabase(application)
         repository = KeystoreRepository(database.keystoreDao())
@@ -83,6 +99,31 @@ class KeystoreDetailViewModel(application: Application) : AndroidViewModel(appli
         viewModelScope.launch {
             repository.getKeystoreById(id).collect { item ->
                 _keystore.value = item
+                if (item != null) {
+                    computeCompressionStats(item)
+                }
+            }
+        }
+    }
+
+    /**
+     * Calcula métricas reales de compresión del archivo en reposo
+     * para verificar el espacio ahorrado mediante compresión ultra-alta.
+     */
+    private fun computeCompressionStats(keystore: KeystoreEntity) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val file = File(keystore.filePath)
+                if (file.exists()) {
+                    val originalBytes = file.readBytes()
+                    val compressed = StorageCompressionHelper.compressWithMaxDeflate(originalBytes)
+                    val savings = StorageCompressionHelper.calculateSavingsPercentage(
+                        originalSize = originalBytes.size.toLong(),
+                        compressedSize = compressed.size.toLong()
+                    )
+                    _compressionStats.value = "Tamaño en disco: ${originalBytes.size} B | Comprimido: ${compressed.size} B (-${"%.1f".format(savings)}%)"
+                }
+            } catch (_: Exception) {
             }
         }
     }
@@ -270,6 +311,225 @@ class KeystoreDetailViewModel(application: Application) : AndroidViewModel(appli
     fun getSuggestedFileName(format: CertificateFormat): String {
         val current = _keystore.value ?: return "cert.${format.extension}"
         return CertificateExportHelper.getSuggestedFileName(current, format)
+    }
+
+    /**
+     * Obtiene el nombre sugerido para el paquete .zip comprimido al máximo.
+     */
+    fun getSuggestedZipFileName(): String {
+        val current = _keystore.value ?: return "keystore_bundle.zip"
+        val safeAlias = current.alias.trim().replace(Regex("[^a-zA-Z0-9._-]"), "_")
+        return "${safeAlias}_complete_bundle.zip"
+    }
+
+    /**
+     * Obtiene el nombre sugerido para el archivo Base64.
+     */
+    fun getSuggestedBase64FileName(): String {
+        val current = _keystore.value ?: return "keystore.base64"
+        return "${current.fileName}.base64"
+    }
+
+    /**
+     * Obtiene el nombre sugerido para el archivo Gradle Kotlin DSL.
+     */
+    fun getSuggestedGradleFileName(): String {
+        return "signingConfigs.gradle.kts"
+    }
+
+    /**
+     * Obtiene el nombre sugerido para el archivo de workflow de GitHub Actions.
+     */
+    fun getSuggestedWorkflowFileName(): String {
+        return "build-and-sign.yml"
+    }
+
+    /**
+     * Genera el paquete completo ultra-comprimido All-in-One (.zip) en segundo plano.
+     */
+    fun prepareZipBundle(onReady: ((ByteArray) -> Unit)? = null) {
+        val current = _keystore.value ?: return
+        viewModelScope.launch {
+            _isPackagingZip.value = true
+            _zipBundleError.value = null
+            val result = withContext(Dispatchers.IO) {
+                StorageCompressionHelper.buildCompleteZipBundle(current)
+            }
+            if (result.isSuccess) {
+                val bytes = result.getOrThrow()
+                _zipBundleBytes.value = bytes
+                onReady?.invoke(bytes)
+            } else {
+                _zipBundleError.value = result.exceptionOrNull()?.localizedMessage ?: "Error al empaquetar archivos"
+            }
+            _isPackagingZip.value = false
+        }
+    }
+
+    /**
+     * Comparte el paquete .zip completo mediante el FileProvider del sistema.
+     */
+    fun shareZipBundle(context: Context) {
+        val current = _keystore.value ?: return
+        viewModelScope.launch {
+            _isPackagingZip.value = true
+            val bytes = _zipBundleBytes.value ?: withContext(Dispatchers.IO) {
+                StorageCompressionHelper.buildCompleteZipBundle(current).getOrNull()
+            }
+            if (bytes != null) {
+                _zipBundleBytes.value = bytes
+                val fileName = getSuggestedZipFileName()
+                val shareResult = StorageCompressionHelper.shareZipFile(context, fileName, bytes)
+                if (shareResult.isSuccess) {
+                    _securityAlert.value = SecurityAlert(
+                        title = "Paquete ZIP Listo",
+                        message = "Paquete '$fileName' (${bytes.size} B) preparado para compartir.",
+                        isSensitive = false
+                    )
+                } else {
+                    _zipBundleError.value = shareResult.exceptionOrNull()?.localizedMessage
+                }
+            } else {
+                _zipBundleError.value = "No se pudieron empaquetar los archivos para compartir"
+            }
+            _isPackagingZip.value = false
+        }
+    }
+
+    /**
+     * Guarda el paquete .zip completo en la ruta seleccionada por el usuario mediante SAF (CreateDocument).
+     */
+    fun saveZipBundleToUri(context: Context, destinationUri: Uri) {
+        val current = _keystore.value ?: return
+        viewModelScope.launch {
+            _isPackagingZip.value = true
+            val bytes = _zipBundleBytes.value ?: withContext(Dispatchers.IO) {
+                StorageCompressionHelper.buildCompleteZipBundle(current).getOrNull()
+            }
+            if (bytes != null) {
+                _zipBundleBytes.value = bytes
+                val saveResult = withContext(Dispatchers.IO) {
+                    StorageCompressionHelper.writeBytesToUri(context, destinationUri, bytes)
+                }
+                if (saveResult.isSuccess) {
+                    _securityAlert.value = SecurityAlert(
+                        title = "Paquete ZIP Guardado",
+                        message = "Paquete completo guardado exitosamente (${bytes.size} B con compresión ultra-alta).",
+                        isSensitive = false
+                    )
+                } else {
+                    _zipBundleError.value = saveResult.exceptionOrNull()?.localizedMessage
+                }
+            } else {
+                _zipBundleError.value = "No se pudo generar el contenido del paquete comprimido"
+            }
+            _isPackagingZip.value = false
+        }
+    }
+
+    /**
+     * Guarda el archivo original de la Keystore individualmente en una carpeta seleccionada mediante SAF.
+     */
+    fun saveKeystoreToUri(context: Context, destinationUri: Uri) {
+        val current = _keystore.value ?: return
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                KeystoreExportHelper.writeKeystoreToUri(context, current, destinationUri)
+            }
+            if (result.isSuccess) {
+                _securityAlert.value = SecurityAlert(
+                    title = "Keystore Guardada",
+                    message = "Archivo ${current.fileName} guardado individualmente en la carpeta elegida.",
+                    isSensitive = false
+                )
+            } else {
+                _securityAlert.value = SecurityAlert(
+                    title = "Error al guardar",
+                    message = result.exceptionOrNull()?.localizedMessage ?: "No se pudo guardar la keystore",
+                    isSensitive = true
+                )
+            }
+        }
+    }
+
+    /**
+     * Guarda el archivo Base64 (.base64) individualmente en una carpeta seleccionada mediante SAF.
+     */
+    fun saveBase64ToUri(context: Context, destinationUri: Uri) {
+        val current = _keystore.value ?: return
+        viewModelScope.launch {
+            val base64Text = _base64Content.value ?: withContext(Dispatchers.IO) {
+                KeystoreExportHelper.generateBase64(current).getOrNull()
+            }
+            if (base64Text != null) {
+                val result = withContext(Dispatchers.IO) {
+                    KeystoreExportHelper.writeBase64ToUri(context, base64Text, destinationUri)
+                }
+                if (result.isSuccess) {
+                    _securityAlert.value = SecurityAlert(
+                        title = "Base64 Guardado",
+                        message = "Archivo ${current.fileName}.base64 guardado exitosamente.",
+                        isSensitive = false
+                    )
+                } else {
+                    _securityAlert.value = SecurityAlert(
+                        title = "Error al guardar",
+                        message = result.exceptionOrNull()?.localizedMessage ?: "No se pudo guardar el archivo Base64",
+                        isSensitive = true
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * Guarda el archivo Gradle (.gradle.kts) individualmente con SAF.
+     */
+    fun saveGradleSnippetToUri(context: Context, destinationUri: Uri) {
+        val current = _keystore.value ?: return
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                KeystoreExportHelper.writeGradleSnippetToUri(context, current, destinationUri)
+            }
+            if (result.isSuccess) {
+                _securityAlert.value = SecurityAlert(
+                    title = "Configuración Gradle Guardada",
+                    message = "Archivo signingConfigs.gradle.kts guardado con éxito.",
+                    isSensitive = false
+                )
+            } else {
+                _securityAlert.value = SecurityAlert(
+                    title = "Error al guardar",
+                    message = result.exceptionOrNull()?.localizedMessage ?: "No se pudo guardar el archivo Gradle",
+                    isSensitive = true
+                )
+            }
+        }
+    }
+
+    /**
+     * Guarda el archivo de workflow de GitHub Actions (.yml) individualmente con SAF.
+     */
+    fun saveGitHubWorkflowToUri(context: Context, destinationUri: Uri) {
+        val current = _keystore.value ?: return
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                KeystoreExportHelper.writeGitHubWorkflowToUri(context, current, destinationUri)
+            }
+            if (result.isSuccess) {
+                _securityAlert.value = SecurityAlert(
+                    title = "Workflow Guardado",
+                    message = "Archivo build-and-sign.yml guardado con éxito.",
+                    isSensitive = false
+                )
+            } else {
+                _securityAlert.value = SecurityAlert(
+                    title = "Error al guardar",
+                    message = result.exceptionOrNull()?.localizedMessage ?: "No se pudo guardar el workflow",
+                    isSensitive = true
+                )
+            }
+        }
     }
 
     fun deleteKeystore(onDeleted: () -> Unit) {
