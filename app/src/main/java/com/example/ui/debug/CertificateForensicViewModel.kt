@@ -151,6 +151,8 @@ class CertificateForensicViewModel(application: Application) : AndroidViewModel(
                         commonName = "Inspector Forense Android",
                         organization = "Crypto Lab Debugger",
                         organizationalUnit = "Security Audit Team",
+                        city = "Ciudad de México",
+                        state = "CDMX",
                         countryCode = "MX"
                     )
 

@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import com.example.data.dao.KeystoreDao
 import com.example.data.model.KeystoreEntity
 
@@ -13,7 +15,7 @@ import com.example.data.model.KeystoreEntity
  */
 @Database(
     entities = [KeystoreEntity::class],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -26,6 +28,17 @@ abstract class AppDatabase : RoomDatabase() {
         private var INSTANCE: AppDatabase? = null
 
         /**
+         * Migración 1 -> 2: Agrega las columnas 'city' y 'state' para soportar los campos
+         * completos del estándar X.500 Distinguished Name exigidos por Google / Android Studio.
+         */
+        val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE keystores ADD COLUMN city TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE keystores ADD COLUMN state TEXT NOT NULL DEFAULT ''")
+            }
+        }
+
+        /**
          * Obtiene la instancia singleton de la base de datos de Room.
          * Garantiza una única conexión durante el ciclo de vida de la app.
          */
@@ -35,7 +48,9 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     "keystore_creator_database"
-                ).fallbackToDestructiveMigration(false)
+                )
+                .addMigrations(MIGRATION_1_2)
+                .fallbackToDestructiveMigration(false)
                 .build()
                 INSTANCE = instance
                 instance

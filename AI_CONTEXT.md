@@ -32,6 +32,13 @@ Keystore Creator es una aplicación nativa para Android cuyo objetivo es permiti
 - La aplicación soporta explícitamente ambas extensiones (`.jks` y `.keystore`). Al escribir en el campo de nombre, el sistema detecta si el usuario escribió la extensión y la separa automáticamente, evitando nombres duplicados como `mi_llave.jks.jks` o `mi_llave.keystore.keystore`.
 - Bouncy Castle y el runtime de Android manejan PKCS12 con soporte completo para almacenar la clave privada RSA y la cadena de certificados X.509 v3.
 
+### 2. Estándar X.509 v3 Completo y Extensiones Canónicas (RFC 5280)
+- **Migración a X.509 v3 Oficial:** Los certificados emitidos son explícitamente versión 3 (`0x02`), satisfaciendo a herramientas de compilación (`apksigner`, `bundletool`) y analizadores de seguridad corporativos.
+- **Extensiones Integradas Obligatorias:**
+  - `BasicConstraints(false)` con bandera crítica `isCritical = true`: Declara inequívocamente que el certificado corresponde a una entidad final y no a una CA emisora.
+  - `KeyUsage(KeyUsage.digitalSignature)` con bandera crítica `isCritical = true`: Habilita formalmente el par de claves para la firma digital de binarios Android (APK/AAB).
+  - `SubjectKeyIdentifier (SKI)` y `AuthorityKeyIdentifier (AKI)`: Hashes SHA-1 generados con `JcaX509ExtensionUtils` a partir de la clave pública, permitiendo un indexado y verificación instantáneos en cadenas de confianza APK Signature Schemes v2 y v3.
+
 ### 2. Rango de Validez Granular (1 día a 100 años)
 - La validez del certificado X.509 se calcula en días exactos con `Calendar.add(Calendar.DAY_OF_YEAR, totalDays)`, permitiendo un rango continuo desde 1 día (para pruebas rápidas de depuración) hasta 100 años (36,500 días para firmas de largo plazo).
 

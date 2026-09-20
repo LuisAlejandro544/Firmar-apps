@@ -7,7 +7,11 @@ Una aplicación móvil moderna desarrollada en **Kotlin** y **Jetpack Compose** 
 ## 📱 Características Principales
 
 - **Generador de Keystores Criptográfico:**
-  - Creación de pares de claves RSA (2048 y 4096 bits) con certificados X.509 v3 autofirmados.
+  - Creación de pares de claves RSA (2048 y 4096 bits) con certificados **X.509 v3** autofirmados de validez industrial completa (RFC 5280).
+  - **Extensiones X.509 v3 Estándar Incorporadas:**
+    - `BasicConstraints(false)` (marcada como crítica): Declara que el certificado es de entidad final y no una CA, satisfaciendo a analizadores estáticos y escáneres de seguridad corporativos (MobSF, SonarQube).
+    - `KeyUsage(digitalSignature)` (marcada como crítica): Autoriza explícitamente el uso del par de claves para firma digital de binarios Android.
+    - `SubjectKeyIdentifier (SKI)` y `AuthorityKeyIdentifier (AKI)`: Hashes de 160 bits (SHA-1) calculados mediante `JcaX509ExtensionUtils` para optimizar la indexación y verificación de firmas en `apksigner` y esquemas de firma APK v2 y v3.
   - **Soporte Dual de Formatos (`.jks` y `.keystore`):** Selector de extensión estándar Android o clásico/Flutter, con autocompletado y detección inteligente de nombres para que el usuario escriba lo que desee sin preocuparse por escribir la extensión a mano.
   - **Validez Granular de 1 Día a 100 Años con Slider Interactivo:** Control deslizante continuo que permite fijar la validez desde 1 día (ideal para pruebas temporales o debug) hasta 100 años (llaves de producción de largo plazo), con cálculo de fecha de caducidad en tiempo real y accesos rápidos (1 día, 30 días, 1 año, 25 años, 30 años, 100 años).
   - Firma digital con algoritmo `SHA256withRSA` utilizando el proveedor de seguridad nativo de Android.

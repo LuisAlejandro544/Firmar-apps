@@ -11,6 +11,8 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -25,12 +27,17 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Badge
+import androidx.compose.material.icons.filled.Business
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Key
+import androidx.compose.material.icons.filled.LocationCity
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Map
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Security
@@ -90,7 +97,7 @@ import java.util.Locale
  * Proporciona un formulario intuitivo optimizado para móviles con validación,
  * opciones rápidas y compatibilidad con estándares de firma de Android.
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun GeneratorScreen(
     viewModel: GeneratorViewModel,
@@ -210,15 +217,16 @@ fun GeneratorScreen(
                         singleLine = true
                     )
 
-                    // Selector de formato de archivo (.jks o .keystore)
+                    // Selector de formato de archivo (.jks o .keystore) con FlowRow adaptativo para pantallas móviles
                     Text(
                         text = "Formato de archivo:",
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Medium
                     )
-                    Row(
+                    FlowRow(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         FilterChip(
                             selected = state.selectedExtension == ".jks",
@@ -647,15 +655,16 @@ fun GeneratorScreen(
                         color = MaterialTheme.colorScheme.primary
                     )
 
-                    // Tamaño de la clave RSA
+                    // Tamaño de la clave RSA con FlowRow adaptativo para pantallas móviles
                     Text(
                         text = "Tamaño de Clave RSA:",
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Medium
                     )
-                    Row(
+                    FlowRow(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         FilterChip(
                             selected = state.keySize == 2048,
@@ -822,27 +831,73 @@ fun GeneratorScreen(
                             verticalArrangement = Arrangement.spacedBy(10.dp),
                             modifier = Modifier.fillMaxWidth()
                         ) {
+                            Text(
+                                text = "Campos estándar de Google y Android Studio (Distinguished Name X.500) que se incrustan en el certificado autofirmado:",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+
+                            // 1. Common Name (CN)
                             OutlinedTextField(
                                 value = state.commonName,
                                 onValueChange = { viewModel.onCommonNameChange(it) },
                                 label = { Text("Nombre y Apellidos / Autor (CN)") },
+                                leadingIcon = {
+                                    Icon(Icons.Default.Person, contentDescription = null)
+                                },
                                 modifier = Modifier.fillMaxWidth().testTag("common_name_input"),
                                 singleLine = true
                             )
+
+                            // 2. Organization (O)
                             OutlinedTextField(
                                 value = state.organization,
                                 onValueChange = { viewModel.onOrganizationChange(it) },
                                 label = { Text("Organización / Empresa (O)") },
+                                leadingIcon = {
+                                    Icon(Icons.Default.Business, contentDescription = null)
+                                },
                                 modifier = Modifier.fillMaxWidth().testTag("organization_input"),
                                 singleLine = true
                             )
+
+                            // 3. Organizational Unit (OU)
                             OutlinedTextField(
                                 value = state.organizationalUnit,
                                 onValueChange = { viewModel.onOrganizationalUnitChange(it) },
                                 label = { Text("Unidad / Departamento (OU)") },
+                                leadingIcon = {
+                                    Icon(Icons.Default.Badge, contentDescription = null)
+                                },
                                 modifier = Modifier.fillMaxWidth().testTag("unit_input"),
                                 singleLine = true
                             )
+
+                            // 4. City or Locality (L) - Estándar Google
+                            OutlinedTextField(
+                                value = state.city,
+                                onValueChange = { viewModel.onCityChange(it) },
+                                label = { Text("Ciudad o Localidad (L)") },
+                                leadingIcon = {
+                                    Icon(Icons.Default.LocationCity, contentDescription = null)
+                                },
+                                modifier = Modifier.fillMaxWidth().testTag("city_input"),
+                                singleLine = true
+                            )
+
+                            // 5. State or Province (ST) - Estándar Google
+                            OutlinedTextField(
+                                value = state.state,
+                                onValueChange = { viewModel.onStateChange(it) },
+                                label = { Text("Estado o Provincia (ST)") },
+                                leadingIcon = {
+                                    Icon(Icons.Default.Map, contentDescription = null)
+                                },
+                                modifier = Modifier.fillMaxWidth().testTag("state_input"),
+                                singleLine = true
+                            )
+
+                            // 6. Country Code (C)
                             OutlinedTextField(
                                 value = state.countryCode,
                                 onValueChange = { viewModel.onCountryCodeChange(it) },

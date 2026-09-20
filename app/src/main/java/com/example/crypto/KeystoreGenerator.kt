@@ -6,7 +6,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.bouncycastle.asn1.x500.X500NameBuilder
 import org.bouncycastle.asn1.x500.style.BCStyle
+import org.bouncycastle.asn1.x509.BasicConstraints
+import org.bouncycastle.asn1.x509.Extension
+import org.bouncycastle.asn1.x509.KeyUsage
 import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter
+import org.bouncycastle.cert.jcajce.JcaX509ExtensionUtils
 import org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder
@@ -38,6 +42,8 @@ data class KeystoreParams(
     val commonName: String = "Android Developer",
     val organization: String = "Mobile Development",
     val organizationalUnit: String = "Development",
+    val city: String = "Madrid",
+    val state: String = "Madrid",
     val countryCode: String = "ES"
 )
 
@@ -97,6 +103,12 @@ object KeystoreGenerator {
                 if (params.organization.isNotBlank()) {
                     nameBuilder.addRDN(BCStyle.O, params.organization.trim())
                 }
+                if (params.city.isNotBlank()) {
+                    nameBuilder.addRDN(BCStyle.L, params.city.trim())
+                }
+                if (params.state.isNotBlank()) {
+                    nameBuilder.addRDN(BCStyle.ST, params.state.trim())
+                }
                 if (params.countryCode.isNotBlank()) {
                     nameBuilder.addRDN(BCStyle.C, params.countryCode.trim().take(2).uppercase())
                 }
@@ -120,6 +132,37 @@ object KeystoreGenerator {
                     notAfter,
                     issuerAndSubject,
                     keyPair.public
+                )
+
+                // Agregar extensiones estándar de X.509 v3 para máxima validez y compatibilidad forense
+                // a) BasicConstraints: Certificado de entidad final (no es CA)
+                certBuilder.addExtension(
+                    Extension.basicConstraints,
+                    true, // Marcada como crítica según RFC 5280
+                    BasicConstraints(false)
+                )
+
+                // b) KeyUsage: Autorizado para firma digital (requerido para firma de código Android)
+                certBuilder.addExtension(
+                    Extension.keyUsage,
+                    true,
+                    KeyUsage(KeyUsage.digitalSignature)
+                )
+
+                // c) Identificadores de clave: SubjectKeyIdentifier y AuthorityKeyIdentifier
+                val extUtils = JcaX509ExtensionUtils()
+                val ski = extUtils.createSubjectKeyIdentifier(keyPair.public)
+                val aki = extUtils.createAuthorityKeyIdentifier(keyPair.public)
+
+                certBuilder.addExtension(
+                    Extension.subjectKeyIdentifier,
+                    false,
+                    ski
+                )
+                certBuilder.addExtension(
+                    Extension.authorityKeyIdentifier,
+                    false,
+                    aki
                 )
 
                 // Usar el motor de firma del sistema (Conscrypt/OpenSSL nativo en Android)
@@ -178,6 +221,8 @@ object KeystoreGenerator {
                     commonName = params.commonName.trim(),
                     organization = params.organization.trim(),
                     organizationalUnit = params.organizationalUnit.trim(),
+                    city = params.city.trim(),
+                    state = params.state.trim(),
                     countryCode = params.countryCode.trim().take(2).uppercase(),
                     sha256Fingerprint = sha256Fingerprint,
                     sha1Fingerprint = sha1Fingerprint,

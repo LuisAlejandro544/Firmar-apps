@@ -126,6 +126,18 @@ class CryptoSecurityUnitTest {
         val cert = certResult.getOrThrow()
         assertNotNull("El certificado no debe ser nulo", cert)
         assertEquals("X.509", cert.type)
+        assertEquals("Debe ser certificado versión 3", 3, cert.version)
+
+        // Verificar extensiones X.509 v3 agregadas:
+        // BasicConstraints (no es CA)
+        assertEquals("BasicConstraints debe indicar que no es CA (-1)", -1, cert.basicConstraints)
+        // KeyUsage (digitalSignature es el bit 0 en cert.keyUsage)
+        assertNotNull("KeyUsage no debe ser nulo", cert.keyUsage)
+        assertTrue("Debe incluir el uso para digitalSignature", cert.keyUsage[0])
+        // SubjectKeyIdentifier (OID 2.5.29.14)
+        assertNotNull("SubjectKeyIdentifier debe estar presente", cert.getExtensionValue("2.5.29.14"))
+        // AuthorityKeyIdentifier (OID 2.5.29.35)
+        assertNotNull("AuthorityKeyIdentifier debe estar presente", cert.getExtensionValue("2.5.29.35"))
 
         // 2. Formato PEM
         val pemText = CertificateExportHelper.formatAsPem(cert)
@@ -203,5 +215,43 @@ class CryptoSecurityUnitTest {
             keyPassword = "WrongKeyPass#999"
         )
         assertTrue("Debe fallar con contraseña de clave incorrecta", wrongKeyPassResult.isFailure)
+    }
+
+    @Test
+    fun `keystore generator includes full Google X500 distinguished name fields`() = runBlocking {
+        val context: Context = ApplicationProvider.getApplicationContext()
+        val params = KeystoreParams(
+            title = "Google Standard Keystore",
+            fileName = "google_standard.jks",
+            alias = "google_key",
+            storePassword = "StorePass#Google2026",
+            keyPassword = "KeyPass#Google2026",
+            keySize = 2048,
+            validityYears = 25,
+            commonName = "John Doe",
+            organization = "Acme Corp",
+            organizationalUnit = "Mobile Engineering",
+            city = "San Francisco",
+            state = "California",
+            countryCode = "US"
+        )
+
+        val keystoreEntity = KeystoreGenerator.generateKeystore(context, params).getOrThrow()
+        assertEquals("John Doe", keystoreEntity.commonName)
+        assertEquals("Acme Corp", keystoreEntity.organization)
+        assertEquals("Mobile Engineering", keystoreEntity.organizationalUnit)
+        assertEquals("San Francisco", keystoreEntity.city)
+        assertEquals("California", keystoreEntity.state)
+        assertEquals("US", keystoreEntity.countryCode)
+
+        // Extraer certificado X.509 y comprobar que el Subject DN contiene los componentes
+        val cert = CertificateExportHelper.extractCertificate(keystoreEntity).getOrThrow()
+        val subject = cert.subjectX500Principal.name
+        assertTrue("El sujeto debe contener CN=John Doe", subject.contains("CN=John Doe"))
+        assertTrue("El sujeto debe contener O=Acme Corp", subject.contains("O=Acme Corp"))
+        assertTrue("El sujeto debe contener OU=Mobile Engineering", subject.contains("OU=Mobile Engineering"))
+        assertTrue("El sujeto debe contener L=San Francisco", subject.contains("L=San Francisco"))
+        assertTrue("El sujeto debe contener ST=California", subject.contains("ST=California"))
+        assertTrue("El sujeto debe contener C=US", subject.contains("C=US"))
     }
 }

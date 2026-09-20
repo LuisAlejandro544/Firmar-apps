@@ -57,6 +57,8 @@ data class ImportedKeystoreValidation(
     val commonName: String,
     val organization: String,
     val organizationalUnit: String,
+    val city: String = "",
+    val state: String = "",
     val countryCode: String,
     val notBefore: Long,
     val notAfter: Long,
@@ -302,6 +304,8 @@ object ZipImportHelper {
             val commonName = getRdn(BCStyle.CN).ifEmpty { "Desarrollador" }
             val organization = getRdn(BCStyle.O).ifEmpty { "Android Development" }
             val orgUnit = getRdn(BCStyle.OU).ifEmpty { "Development" }
+            val city = getRdn(BCStyle.L)
+            val state = getRdn(BCStyle.ST)
             val countryCode = getRdn(BCStyle.C).take(2).uppercase().ifEmpty { "ES" }
 
             // 5. Calcular huellas digitales directamente sobre los bytes del certificado
@@ -329,6 +333,8 @@ object ZipImportHelper {
                 commonName = commonName,
                 organization = organization,
                 organizationalUnit = orgUnit,
+                city = city,
+                state = state,
                 countryCode = countryCode,
                 notBefore = notBefore,
                 notAfter = notAfter,
@@ -380,6 +386,8 @@ object ZipImportHelper {
                 commonName = validation.commonName,
                 organization = validation.organization,
                 organizationalUnit = validation.organizationalUnit,
+                city = validation.city,
+                state = validation.state,
                 countryCode = validation.countryCode,
                 sha256Fingerprint = validation.sha256Fingerprint,
                 sha1Fingerprint = validation.sha1Fingerprint,

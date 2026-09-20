@@ -36,6 +36,8 @@ data class GeneratorUiState(
     val commonName: String = "Desarrollador Android",
     val organization: String = "Mobile Apps",
     val organizationalUnit: String = "Desarrollo",
+    val city: String = "Madrid",
+    val state: String = "Madrid",
     val countryCode: String = "ES",
     val isStorePasswordVisible: Boolean = false,
     val isKeyPasswordVisible: Boolean = false,
@@ -154,6 +156,8 @@ class GeneratorViewModel(application: Application) : AndroidViewModel(applicatio
     fun onCommonNameChange(value: String) = _uiState.update { it.copy(commonName = value) }
     fun onOrganizationChange(value: String) = _uiState.update { it.copy(organization = value) }
     fun onOrganizationalUnitChange(value: String) = _uiState.update { it.copy(organizationalUnit = value) }
+    fun onCityChange(value: String) = _uiState.update { it.copy(city = value) }
+    fun onStateChange(value: String) = _uiState.update { it.copy(state = value) }
     fun onCountryCodeChange(value: String) = _uiState.update { it.copy(countryCode = value.take(2).uppercase()) }
 
     fun toggleStorePasswordVisibility() = _uiState.update { it.copy(isStorePasswordVisible = !it.isStorePasswordVisible) }
@@ -304,6 +308,8 @@ class GeneratorViewModel(application: Application) : AndroidViewModel(applicatio
                 commonName = state.commonName,
                 organization = state.organization,
                 organizationalUnit = state.organizationalUnit,
+                city = state.city,
+                state = state.state,
                 countryCode = state.countryCode
             )
 
@@ -348,6 +354,8 @@ class GeneratorViewModel(application: Application) : AndroidViewModel(applicatio
                 validityDays = 25 * 365,
                 keySize = 2048,
                 commonName = "Android Dev $timestamp",
+                city = "Madrid",
+                state = "Madrid",
                 countryCode = "ES"
             )
         }

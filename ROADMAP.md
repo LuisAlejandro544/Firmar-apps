@@ -18,7 +18,10 @@ Este documento define el plan de evolución y las próximas funcionalidades de l
 
 ### ✅ Fase 1: Fundamentos y Validación (Completada)
 - [x] Motor criptográfico para generación de claves RSA (2048 y 4096 bits).
-- [x] Construcción y firma de certificados X.509 autofirmados con validez configurable.
+- [x] Construcción y firma de certificados **X.509 v3** (RFC 5280) autofirmados con extensiones canónicas:
+  - [x] `BasicConstraints(false)` marcada crítica (entidad final, no CA).
+  - [x] `KeyUsage(digitalSignature)` marcada crítica (firma digital de paquetes Android).
+  - [x] `SubjectKeyIdentifier` y `AuthorityKeyIdentifier` (hashes SHA-1 del par de claves para compatibilidad total con apksigner v2/v3).
 - [x] Soporte dual de formatos de salida: `.jks` (estándar Android) y `.keystore` (clásico y Flutter) con auto-formato inteligente.
 - [x] Rango de validez granular desde 1 día hasta 100 años con Slider continuo y accesos rápidos.
 - [x] Empaquetado en formato estándar PKCS12 compatible con `.jks` y `.keystore`.

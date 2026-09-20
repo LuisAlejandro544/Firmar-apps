@@ -252,6 +252,8 @@ object StorageCompressionHelper {
                 appendLine("Titular (CN): ${keystore.commonName}")
                 appendLine("Organización (O): ${keystore.organization}")
                 appendLine("Unidad (OU): ${keystore.organizationalUnit}")
+                if (keystore.city.isNotBlank()) appendLine("Ciudad (L): ${keystore.city}")
+                if (keystore.state.isNotBlank()) appendLine("Estado / Provincia (ST): ${keystore.state}")
                 appendLine("País (C): ${keystore.countryCode}")
                 appendLine("------------------------------------------------------")
                 appendLine("HUELLAS DIGITALES (FINGERPRINTS):")

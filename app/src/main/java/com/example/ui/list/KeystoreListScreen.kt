@@ -9,6 +9,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -219,6 +221,7 @@ fun KeystoreListScreen(
 /**
  * Tarjeta individual para mostrar el resumen de una keystore generada.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun KeystoreItemCard(
     keystore: KeystoreEntity,
@@ -293,15 +296,22 @@ private fun KeystoreItemCard(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Etiquetas con metadata clave
-            Row(
+            // Etiquetas con metadata clave organizadas en FlowRow para evitar colapsos verticales en móvil
+            FlowRow(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
+                verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 SuggestionChip(
                     onClick = { },
-                    label = { Text("Alias: ${keystore.alias}", style = MaterialTheme.typography.labelSmall) },
+                    label = {
+                        Text(
+                            text = "Alias: ${keystore.alias}",
+                            style = MaterialTheme.typography.labelSmall,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    },
                     colors = SuggestionChipDefaults.suggestionChipColors(
                         containerColor = MaterialTheme.colorScheme.surfaceVariant
                     )
@@ -309,7 +319,13 @@ private fun KeystoreItemCard(
 
                 SuggestionChip(
                     onClick = { },
-                    label = { Text(keystore.keyAlgorithm, style = MaterialTheme.typography.labelSmall) },
+                    label = {
+                        Text(
+                            text = keystore.keyAlgorithm,
+                            style = MaterialTheme.typography.labelSmall,
+                            maxLines = 1
+                        )
+                    },
                     colors = SuggestionChipDefaults.suggestionChipColors(
                         containerColor = MaterialTheme.colorScheme.surfaceVariant
                     )
@@ -317,7 +333,13 @@ private fun KeystoreItemCard(
 
                 SuggestionChip(
                     onClick = { },
-                    label = { Text(formattedSize, style = MaterialTheme.typography.labelSmall) },
+                    label = {
+                        Text(
+                            text = formattedSize,
+                            style = MaterialTheme.typography.labelSmall,
+                            maxLines = 1
+                        )
+                    },
                     colors = SuggestionChipDefaults.suggestionChipColors(
                         containerColor = MaterialTheme.colorScheme.surfaceVariant
                     )

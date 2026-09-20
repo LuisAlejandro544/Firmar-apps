@@ -60,6 +60,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -294,6 +295,44 @@ fun KeystoreDetailScreen(
                             }
                             DetailItemRow(label = "Ruta interna", value = currentKeystore.filePath) {
                                 viewModel.copyNonSensitiveValue(context, "Ruta de archivo", currentKeystore.filePath)
+                            }
+
+                            HorizontalDivider(
+                                modifier = Modifier.padding(vertical = 6.dp),
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                            )
+
+                            Text(
+                                text = "Distinguished Name X.500 (Google / Android Studio):",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+
+                            DetailItemRow(label = "Titular (CN)", value = currentKeystore.commonName) {
+                                viewModel.copyNonSensitiveValue(context, "Titular", currentKeystore.commonName)
+                            }
+                            if (currentKeystore.organization.isNotBlank()) {
+                                DetailItemRow(label = "Organización (O)", value = currentKeystore.organization) {
+                                    viewModel.copyNonSensitiveValue(context, "Organización", currentKeystore.organization)
+                                }
+                            }
+                            if (currentKeystore.organizationalUnit.isNotBlank()) {
+                                DetailItemRow(label = "Unidad (OU)", value = currentKeystore.organizationalUnit) {
+                                    viewModel.copyNonSensitiveValue(context, "Unidad", currentKeystore.organizationalUnit)
+                                }
+                            }
+                            if (currentKeystore.city.isNotBlank()) {
+                                DetailItemRow(label = "Ciudad o Localidad (L)", value = currentKeystore.city) {
+                                    viewModel.copyNonSensitiveValue(context, "Ciudad", currentKeystore.city)
+                                }
+                            }
+                            if (currentKeystore.state.isNotBlank()) {
+                                DetailItemRow(label = "Estado o Provincia (ST)", value = currentKeystore.state) {
+                                    viewModel.copyNonSensitiveValue(context, "Estado", currentKeystore.state)
+                                }
+                            }
+                            DetailItemRow(label = "Código de País (C)", value = currentKeystore.countryCode) {
+                                viewModel.copyNonSensitiveValue(context, "Código de País", currentKeystore.countryCode)
                             }
                         }
                     }

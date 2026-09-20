@@ -51,6 +51,12 @@ data class KeystoreEntity(
     /** Unidad organizativa (OU) */
     val organizationalUnit: String,
 
+    /** Ciudad o Localidad (L) según estándar X.500 de Google / Android Studio */
+    val city: String = "",
+
+    /** Estado o Provincia (ST) según estándar X.500 de Google / Android Studio */
+    val state: String = "",
+
     /** Código de país de 2 caracteres (C) */
     val countryCode: String,
 
