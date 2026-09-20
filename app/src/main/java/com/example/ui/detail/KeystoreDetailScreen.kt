@@ -1,5 +1,7 @@
 package com.example.ui.detail
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
@@ -36,13 +38,16 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.DataObject
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.IntegrationInstructions
 import androidx.compose.material.icons.filled.Key
+import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Terminal
+import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.AlertDialog
@@ -85,6 +90,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.crypto.CertificateFormat
 import com.example.crypto.KeystoreExportHelper
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
@@ -113,10 +119,25 @@ fun KeystoreDetailScreen(
     val base64Error by viewModel.base64Error.collectAsStateWithLifecycle()
     val securityAlert by viewModel.securityAlert.collectAsStateWithLifecycle()
 
+    // Estados para exportación de certificados públicos (.pem, .crt, .der)
+    val certificatePem by viewModel.certificatePem.collectAsStateWithLifecycle()
+    val isExtractingCert by viewModel.isExtractingCert.collectAsStateWithLifecycle()
+    val certError by viewModel.certError.collectAsStateWithLifecycle()
+    val selectedCertFormat by viewModel.selectedCertFormat.collectAsStateWithLifecycle()
+
     val context = LocalContext.current
     var showDeleteConfirm by remember { mutableStateOf(false) }
     // Estado para la navegación por pestañas del bloque de códigos de integración (0 = Gradle, 1 = CI/CD)
     var selectedCodeSnippetTab by remember { mutableStateOf(0) }
+
+    // Launcher del Storage Access Framework para guardar directamente el certificado en el almacenamiento
+    val saveCertLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument(selectedCertFormat.mimeType)
+    ) { uri ->
+        if (uri != null) {
+            viewModel.saveCertificateToUri(context, uri, selectedCertFormat)
+        }
+    }
 
     LaunchedEffect(keystoreId) {
         viewModel.loadKeystore(keystoreId)
@@ -548,6 +569,217 @@ fun KeystoreDetailScreen(
                                         fontSize = 11.sp
                                     )
                                 )
+                            }
+                        }
+                    }
+
+                    // Tarjeta 5: Exportación de Certificados Públicos X.509 (.pem / .crt / .der)
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .animateContentSize()
+                            .testTag("detail_public_cert_card"),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surface
+                        ),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            // Encabezado de la tarjeta
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.VerifiedUser,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                                Text(
+                                    text = "Certificado Público (.pem / .crt / .der)",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+
+                            // Banner de seguridad explicativo
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f))
+                                    .padding(10.dp)
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.LockOpen,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Text(
+                                        text = "100% Seguro para compartir. Contiene únicamente tu firma pública X.509 v3. Tu clave privada y contraseñas jamás se exponen.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                                    )
+                                }
+                            }
+
+                            // Selector de formato (PEM, CRT, DER)
+                            SecondaryTabRow(
+                                selectedTabIndex = selectedCertFormat.ordinal,
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                                contentColor = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .testTag("cert_format_tab_row")
+                            ) {
+                                CertificateFormat.entries.forEach { format ->
+                                    Tab(
+                                        selected = selectedCertFormat == format,
+                                        onClick = { viewModel.setCertificateFormat(format) },
+                                        modifier = Modifier.testTag("tab_cert_${format.extension}"),
+                                        text = {
+                                            Text(
+                                                text = format.label,
+                                                fontWeight = if (selectedCertFormat == format) FontWeight.Bold else FontWeight.Normal,
+                                                fontSize = 12.sp
+                                            )
+                                        }
+                                    )
+                                }
+                            }
+
+                            // Descripción del formato seleccionado
+                            Text(
+                                text = selectedCertFormat.description,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+
+                            // Mensaje de error si falla la extracción
+                            if (certError != null) {
+                                Text(
+                                    text = certError ?: "",
+                                    color = MaterialTheme.colorScheme.error,
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+
+                            // Contenido específico para formato PEM (Texto)
+                            if (selectedCertFormat == CertificateFormat.PEM) {
+                                val pem = certificatePem
+                                if (pem == null) {
+                                    Button(
+                                        onClick = { viewModel.loadCertificatePem() },
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .testTag("load_cert_pem_button"),
+                                        enabled = !isExtractingCert
+                                    ) {
+                                        if (isExtractingCert) {
+                                            CircularProgressIndicator(
+                                                modifier = Modifier.size(18.dp),
+                                                color = MaterialTheme.colorScheme.onPrimary,
+                                                strokeWidth = 2.dp
+                                            )
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text("Extrayendo Certificado PEM...")
+                                        } else {
+                                            Icon(Icons.Default.Code, contentDescription = null, modifier = Modifier.size(18.dp))
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text("Ver y Generar Texto PEM")
+                                        }
+                                    }
+                                } else {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = "Bloque PEM (${pem.lines().size} líneas)",
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                        TextButton(onClick = { viewModel.clearCertificatePem() }) {
+                                            Text("Ocultar")
+                                        }
+                                    }
+
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .heightIn(max = 160.dp)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
+                                            .verticalScroll(rememberScrollState())
+                                            .padding(12.dp)
+                                    ) {
+                                        Text(
+                                            text = pem,
+                                            style = MaterialTheme.typography.bodySmall.copy(
+                                                fontFamily = FontFamily.Monospace,
+                                                fontSize = 11.sp
+                                            )
+                                        )
+                                    }
+
+                                    Button(
+                                        onClick = { viewModel.copyCertificatePem(context) },
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .testTag("copy_cert_pem_button")
+                                    ) {
+                                        Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text("Copiar Certificado PEM al Portapapeles")
+                                    }
+                                }
+                            }
+
+                            // Botones de acción: Compartir archivo y Guardar en almacenamiento
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                OutlinedButton(
+                                    onClick = {
+                                        viewModel.shareCertificate(context, selectedCertFormat)
+                                    },
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .testTag("share_cert_${selectedCertFormat.extension}_button"),
+                                    enabled = !isExtractingCert
+                                ) {
+                                    Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Compartir .${selectedCertFormat.extension}", fontSize = 12.sp)
+                                }
+
+                                Button(
+                                    onClick = {
+                                        val suggestedName = viewModel.getSuggestedFileName(selectedCertFormat)
+                                        saveCertLauncher.launch(suggestedName)
+                                    },
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .testTag("save_cert_${selectedCertFormat.extension}_button"),
+                                    enabled = !isExtractingCert
+                                ) {
+                                    Icon(Icons.Default.FileDownload, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Guardar en Móvil", fontSize = 12.sp)
+                                }
                             }
                         }
                     }

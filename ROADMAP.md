@@ -125,6 +125,22 @@ Este documento define el plan de evolución y las próximas funcionalidades de l
 
 ---
 
+### ✅ Fase 5.4: Exportación de Certificados Públicos X.509 (.pem / .crt / .der) (Completada)
+- [x] **Aislamiento Criptográfico y Cero Exposición de Claves (`CertificateExportHelper`):** Extracción del certificado X.509 v3 desde el almacén PKCS12 / JKS, omitiendo por diseño toda clave privada o contraseña. El archivo resultante es 100% seguro para compartir en Google Cloud, Play Console (App Signing), Firebase y Facebook Developers.
+- [x] **Soporte Completo de 3 Formatos Criptográficos:**
+  - [x] **PEM (`.pem`):** Codificación Base64 estándar delimitada (`-----BEGIN CERTIFICATE-----` / `-----END CERTIFICATE-----`) con partición exacta a 64 columnas.
+  - [x] **CRT (`.crt`):** Formato binario estándar para servidores web y sistemas operativos.
+  - [x] **DER (`.der`):** Formato binario nativo ASN.1 sin procesar.
+- [x] **Interfaz Móvil Dedicada en Detalle (`KeystoreDetailScreen`):**
+  - [x] Tarjeta M3 con banner explicativo de seguridad contra filtraciones.
+  - [x] Selector táctil de formatos mediante pestañas animadas (`SecondaryTabRow`).
+  - [x] Visor de texto PEM monoespaciado en pantalla con botón de copiado en 1 clic y auto-limpieza del portapapeles.
+  - [x] Compartición directa del archivo mediante `FileProvider` a apps externas (Drive, Gmail, Telegram).
+  - [x] Guardado directo en el almacenamiento del dispositivo utilizando el selector de documentos nativo de Android (Storage Access Framework `CreateDocument`).
+- [x] **Pruebas Unitarias Automatizadas:** Verificación de extracción, formateo PEM/DER/CRT y validación con `CertificateFactory` nativo en `CryptoSecurityUnitTest`.
+
+---
+
 ### ⏳ Fase 6: Importador e Inspector de Keystores Externas (Próximo Sprint)
 - [ ] Selector de archivos para importar keystores existentes desde el almacenamiento del teléfono.
 - [ ] Extracción y visualización de certificados, alias y huellas de archivos externos.

@@ -41,6 +41,14 @@ Una aplicación móvil moderna desarrollada en **Kotlin** y **Jetpack Compose** 
   - Generador de bloques de configuración listos para `build.gradle.kts` y comandos de `apksigner`.
   - **Workflow Completo de GitHub Actions CI/CD en 1 Clic:** Generador de pipeline completo de integración continua listo para pegar en `.github/workflows/build-and-sign.yml`. Incluye todos los datos ya pre-rellenados para la clave seleccionada: nombre de archivo (`.jks` o `.keystore`), alias, variables de entorno de firma, decodificación Base64 desde secretos, compilación con Gradle y firma verificada con apksigner.
   - **Generación de Base64 con 1 Clic (CI/CD):** Conversión directa del almacén de claves a texto codificado en Base64 para su uso inmediato en variables de entorno como `ANDROID_KEYSTORE_BASE64` en GitHub Actions o pipelines de CI/CD. Incluye opciones para copiar la cadena, compartir texto o exportar como archivo físico `.base64`.
+  - **Exportación de Certificados Públicos X.509 (.pem / .crt / .der):**
+    - Extracción y aislamiento criptográfico del certificado público X.509 v3 directamente desde el almacén PKCS12 / JKS.
+    - **100% Seguro para Compartir:** Contiene exclusivamente la clave pública y los datos de firma. La clave privada y las contraseñas del almacén **nunca** se exponen, haciéndolo ideal para registrar en Google Play Console (App Signing), Firebase, Google Cloud, Facebook Developers o Huawei AppGallery.
+    - **Soporte Tri-Formato con Selector Táctil:**
+      - **PEM (`.pem`):** Formato de texto plano estándar RFC 7468 (`-----BEGIN CERTIFICATE-----` ... `-----END CERTIFICATE-----`), con visor en pantalla y botón de copiado en 1 toque.
+      - **CRT (`.crt`):** Certificado binario estándar universalmente reconocido por sistemas operativos y servidores web.
+      - **DER (`.der`):** Codificación binaria ASN.1 / DER nativa para herramientas de línea de comandos e integraciones de bajo nivel.
+    - **Integración con Almacenamiento Móvil (SAF & FileProvider):** Posibilidad de compartir el archivo a través de cualquier app (Drive, Telegram, WhatsApp, Gmail) o guardarlo directamente en el almacenamiento interno del dispositivo usando el selector de archivos del sistema.
   - **Privacidad, Auto-limpieza en 2 Minutos y Notificaciones In-App:**
     - Al copiar contraseñas o la clave Base64, se suprime la notificación nativa predeterminada de Android (`EXTRA_IS_SENSITIVE`) y se muestra un banner in-app exclusivo con diseño Material Design 3.
     - **Limpieza Automática a los 2 Minutos (Estricta):** Al copiar datos desde la app, se inicia un temporizador de 2 minutos (120 s). Al cumplirse el tiempo, el portapapeles se limpia automáticamente **únicamente si aún contiene el dato exacto copiado de nuestra app**. Si el usuario copió texto de otra aplicación (WhatsApp, navegador, etc.), no se borra, garantizando no interferir con otras actividades del usuario.

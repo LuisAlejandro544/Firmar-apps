@@ -2,8 +2,11 @@ package com.example.ui.detail
 
 import android.app.Application
 import android.content.Context
+import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.crypto.CertificateExportHelper
+import com.example.crypto.CertificateFormat
 import com.example.crypto.KeystoreExportHelper
 import com.example.data.database.AppDatabase
 import com.example.data.model.KeystoreEntity
@@ -13,6 +16,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * Modelo de datos para alertas y avisos in-app de seguridad de la aplicación.
@@ -56,6 +60,19 @@ class KeystoreDetailViewModel(application: Application) : AndroidViewModel(appli
     // Estado para alertas in-app de seguridad de la app (no toscas de Android)
     private val _securityAlert = MutableStateFlow<SecurityAlert?>(null)
     val securityAlert: StateFlow<SecurityAlert?> = _securityAlert.asStateFlow()
+
+    // Estado para la exportación de certificados públicos (.pem / .crt / .der)
+    private val _certificatePem = MutableStateFlow<String?>(null)
+    val certificatePem: StateFlow<String?> = _certificatePem.asStateFlow()
+
+    private val _isExtractingCert = MutableStateFlow(false)
+    val isExtractingCert: StateFlow<Boolean> = _isExtractingCert.asStateFlow()
+
+    private val _certError = MutableStateFlow<String?>(null)
+    val certError: StateFlow<String?> = _certError.asStateFlow()
+
+    private val _selectedCertFormat = MutableStateFlow(CertificateFormat.PEM)
+    val selectedCertFormat: StateFlow<CertificateFormat> = _selectedCertFormat.asStateFlow()
 
     init {
         val database = AppDatabase.getDatabase(application)
@@ -137,6 +154,122 @@ class KeystoreDetailViewModel(application: Application) : AndroidViewModel(appli
      */
     fun dismissSecurityAlert() {
         _securityAlert.value = null
+    }
+
+    /**
+     * Cambia el formato de certificado seleccionado (PEM, CRT o DER).
+     */
+    fun setCertificateFormat(format: CertificateFormat) {
+        _selectedCertFormat.value = format
+    }
+
+    /**
+     * Extrae el certificado X.509 del almacén y genera su representación en formato PEM (texto).
+     */
+    fun loadCertificatePem() {
+        val current = _keystore.value ?: return
+        viewModelScope.launch {
+            _isExtractingCert.value = true
+            _certError.value = null
+            withContext(Dispatchers.IO) {
+                val certResult = CertificateExportHelper.extractCertificate(current)
+                if (certResult.isSuccess) {
+                    val cert = certResult.getOrThrow()
+                    val pemText = CertificateExportHelper.formatAsPem(cert)
+                    _certificatePem.value = pemText
+                } else {
+                    _certError.value = certResult.exceptionOrNull()?.localizedMessage
+                        ?: "No se pudo extraer el certificado público"
+                }
+            }
+            _isExtractingCert.value = false
+        }
+    }
+
+    /**
+     * Limpia la vista previa del PEM del certificado.
+     */
+    fun clearCertificatePem() {
+        _certificatePem.value = null
+        _certError.value = null
+    }
+
+    /**
+     * Copia el texto PEM del certificado al portapapeles.
+     * Al tratarse de un certificado público (sin claves privadas), no representa un riesgo crítico,
+     * pero se notifica amigablemente al usuario con la confirmación in-app.
+     */
+    fun copyCertificatePem(context: Context) {
+        val pem = _certificatePem.value ?: return
+        val current = _keystore.value ?: return
+        KeystoreExportHelper.copyToClipboard(context, "Certificado PEM (${current.alias})", pem, isSensitive = false)
+        _securityAlert.value = SecurityAlert(
+            title = "Certificado PEM copiado",
+            message = "El certificado público X.509 para '${current.alias}' ha sido copiado al portapapeles. Es seguro para compartir.",
+            isSensitive = false
+        )
+    }
+
+    /**
+     * Comparte el certificado público en el formato especificado (.pem, .crt o .der)
+     * mediante el FileProvider del sistema.
+     */
+    fun shareCertificate(context: Context, format: CertificateFormat) {
+        val current = _keystore.value ?: return
+        viewModelScope.launch {
+            _isExtractingCert.value = true
+            val result = withContext(Dispatchers.IO) {
+                CertificateExportHelper.shareCertificate(context, current, format)
+            }
+            if (result.isFailure) {
+                _certError.value = result.exceptionOrNull()?.localizedMessage
+                    ?: "Error al compartir el certificado ${format.label}"
+            } else {
+                _securityAlert.value = SecurityAlert(
+                    title = "Certificado ${format.label} listo",
+                    message = "Archivo ${CertificateExportHelper.getSuggestedFileName(current, format)} preparado para compartir.",
+                    isSensitive = false
+                )
+            }
+            _isExtractingCert.value = false
+        }
+    }
+
+    /**
+     * Guarda el certificado público en el destino seleccionado por el usuario mediante SAF (CreateDocument).
+     */
+    fun saveCertificateToUri(context: Context, destinationUri: Uri, format: CertificateFormat) {
+        val current = _keystore.value ?: return
+        viewModelScope.launch {
+            _isExtractingCert.value = true
+            val result = withContext(Dispatchers.IO) {
+                val certResult = CertificateExportHelper.extractCertificate(current)
+                if (certResult.isFailure) {
+                    return@withContext Result.failure(certResult.exceptionOrNull() ?: Exception("Certificado no disponible"))
+                }
+                val cert = certResult.getOrThrow()
+                val data = CertificateExportHelper.exportCertificateData(cert, format)
+                CertificateExportHelper.writeCertificateToUri(context, destinationUri, data)
+            }
+            if (result.isSuccess) {
+                _securityAlert.value = SecurityAlert(
+                    title = "Certificado Guardado",
+                    message = "El archivo ${format.label} se guardó exitosamente en la ubicación seleccionada.",
+                    isSensitive = false
+                )
+            } else {
+                _certError.value = result.exceptionOrNull()?.localizedMessage ?: "Error al guardar el archivo de certificado"
+            }
+            _isExtractingCert.value = false
+        }
+    }
+
+    /**
+     * Obtiene el nombre sugerido para el archivo del certificado según el formato.
+     */
+    fun getSuggestedFileName(format: CertificateFormat): String {
+        val current = _keystore.value ?: return "cert.${format.extension}"
+        return CertificateExportHelper.getSuggestedFileName(current, format)
     }
 
     fun deleteKeystore(onDeleted: () -> Unit) {

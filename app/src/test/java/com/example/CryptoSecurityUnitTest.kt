@@ -1,16 +1,27 @@
 package com.example
 
+import android.content.Context
+import androidx.test.core.app.ApplicationProvider
+import com.example.crypto.CertificateExportHelper
+import com.example.crypto.CertificateFormat
+import com.example.crypto.KeystoreGenerator
+import com.example.crypto.KeystoreParams
 import com.example.crypto.PasswordLengthOption
 import com.example.crypto.PasswordSecurityEngine
 import com.example.crypto.PasswordStrength
 import com.example.crypto.SecureCredentialsCipher
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import java.io.ByteArrayInputStream
+import java.security.cert.CertificateFactory
+import java.security.cert.X509Certificate
 
 /**
  * Pruebas unitarias para el motor de generación de contraseñas ultra seguras
@@ -89,5 +100,52 @@ class CryptoSecurityUnitTest {
         val safeAudit = PasswordSecurityEngine.auditPassword(ultraPass)
         assertEquals("Contraseña generada debe obtener score 4 (máximo)", 4, safeAudit.score)
         assertTrue("No debe tener advertencia de crackeo", !safeAudit.isCrackableWarning)
+    }
+
+    @Test
+    fun `certificate export extracts valid X509 certificate and formats correctly`() = runBlocking {
+        val context: Context = ApplicationProvider.getApplicationContext()
+        val params = KeystoreParams(
+            title = "Test Cert Keystore",
+            fileName = "test_cert_export.jks",
+            alias = "test_alias",
+            storePassword = "StorePassword#2026",
+            keyPassword = "KeyPassword#2026",
+            keySize = 2048,
+            validityYears = 25,
+            commonName = "Test Developer",
+            organization = "Test Org",
+            countryCode = "ES"
+        )
+
+        val keystoreEntity = KeystoreGenerator.generateKeystore(context, params).getOrThrow()
+
+        // 1. Extraer certificado X.509
+        val certResult = CertificateExportHelper.extractCertificate(keystoreEntity)
+        assertTrue("La extracción del certificado debe ser exitosa", certResult.isSuccess)
+        val cert = certResult.getOrThrow()
+        assertNotNull("El certificado no debe ser nulo", cert)
+        assertEquals("X.509", cert.type)
+
+        // 2. Formato PEM
+        val pemText = CertificateExportHelper.formatAsPem(cert)
+        assertTrue("PEM debe iniciar con el delimitador estándar", pemText.startsWith("-----BEGIN CERTIFICATE-----"))
+        assertTrue("PEM debe terminar con el delimitador estándar", pemText.endsWith("-----END CERTIFICATE-----"))
+
+        // Verificar que el PEM sea decodificable por CertificateFactory estándar
+        val certFactory = CertificateFactory.getInstance("X.509")
+        val parsedCertFromPem = certFactory.generateCertificate(ByteArrayInputStream(pemText.toByteArray(Charsets.UTF_8))) as X509Certificate
+        assertEquals(cert.serialNumber, parsedCertFromPem.serialNumber)
+
+        // 3. Formato DER y CRT
+        val derBytes = CertificateExportHelper.formatAsDer(cert)
+        assertTrue("Los bytes DER deben tener longitud mayor a cero", derBytes.isNotEmpty())
+        val parsedCertFromDer = certFactory.generateCertificate(ByteArrayInputStream(derBytes)) as X509Certificate
+        assertEquals(cert.serialNumber, parsedCertFromDer.serialNumber)
+
+        // 4. Nombre de archivo sugerido
+        assertEquals("test_alias_cert.pem", CertificateExportHelper.getSuggestedFileName(keystoreEntity, CertificateFormat.PEM))
+        assertEquals("test_alias_cert.crt", CertificateExportHelper.getSuggestedFileName(keystoreEntity, CertificateFormat.CRT))
+        assertEquals("test_alias_cert.der", CertificateExportHelper.getSuggestedFileName(keystoreEntity, CertificateFormat.DER))
     }
 }
